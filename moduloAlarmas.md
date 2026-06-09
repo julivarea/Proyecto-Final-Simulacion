@@ -11,10 +11,14 @@ S = {"OCIOSO", "NOTIFICAR ALARMA", "ESPERANDO CONFIRMACION", "REPETIR ALARMA"} x
             default: ("OCIOSO", "NINGUNA", infinite);
         }
     }
-    if (port == 3) {
+    else if (port == 3) {
         // Llegó una confirmación del enfermero
         if (alarmaActiva == "CRITICA") {
             ("OCIOSO", "NINGUNA", infinite);
+        }
+        else {
+            // No hay alarma crítica activa; ignorar
+            (fase, alarmaActiva, σ - elapsedTime);
         }
     }
 δint((fase, alarmaActiva, σ)) = 
@@ -22,22 +26,24 @@ S = {"OCIOSO", "NOTIFICAR ALARMA", "ESPERANDO CONFIRMACION", "REPETIR ALARMA"} x
         case "BAJA": ("OCIOSO", "NINGUNA", infinite);
         case "MEDIA": ("OCIOSO", "NINGUNA", infinite);
         case "CRITICA": 
-            if (fase == "NOTIFICAR_ALARMA") {
+            if (fase == "NOTIFICAR ALARMA") {
                 // Estamos notificando la alarma crítica por primera vez. Esperamos confirmación durante 30 segundos
-                ("ESPERANDO CONFIRMACIÓN", "CRITICA", 30);
+                ("ESPERANDO CONFIRMACION", "CRITICA", 30);
             }
             else if (fase == "ESPERANDO CONFIRMACION") {
-                // Pasaron 30 segundos sin confirmación. Empezamos a repetir la alarma
-                ("REPETIR ALARMA", "CRITICA", 10);
+                // Pasaron 30 segundos sin confirmación.
+                // sigma=0: la alarma suena inmediatamente y luego se repite cada 10 s
+                ("REPETIR ALARMA", "CRITICA", 0);
             }
             else if (fase == "REPETIR ALARMA") {
                 ("REPETIR ALARMA", "CRITICA", 10);
             }
     }
 λ((fase, alarmaActiva, σ)) = 
-    if (fase == "NOTIFICAR ALARMA" || fase == "REPETIR ALARMA" || fase == "ESPERANDO_CONFIRMACION") {
-        // Emitimos la alarma cuando se agota el tiempo en alguna de las etapas de alerta (no ociosas)
-        (alarmaActiva, 0) 
+    if (fase == "NOTIFICAR ALARMA" || fase == "REPETIR ALARMA") {
+        // Emitimos la alarma al notificar por primera vez y en cada repetición.
+        // En fase ESPERANDO CONFIRMACION no se emite: solo se espera al enfermero.
+        (alarmaActiva, 0)
     }
     else {
         NADA
