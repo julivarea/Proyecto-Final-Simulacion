@@ -1,45 +1,58 @@
-X = {"alarmaBaja"} x {In 0} U {"alarmaMedia"} x {In 1}, {"alarmaCrítica"} x {In 2}, {"confirmaciónEnfermero"} x {In 3}
-Y = {"BAJA", "MEDIA", "CRÍTICA"} x {Out 0}
-S = {"OCIOSO", "NOTIFICAR ALARMA", "ESPERANDO CONFIRMACION", "REPETIR ALARMA"} x {"NINGUNA", "BAJA", "MEDIA", "CRÍTICA"} x ℝ+ [fase, alarmaActiva, σ]
-δext((fase, alarmaActiva, σ), elapsedTime, (event, port) =
-    if (port == 0 || port == 1 || port == 2) {
-        // Llegó una alarma. event es una alarma baja, media o crítica
-        switch (event) {
-            case "alarmaBaja": ("NOTIFICAR ALARMA", "BAJA", 0);
-            case "alarmaMedia": ("NOTIFICAR ALARMA", "MEDIA", 0);
-            case "alarmaCritica": ("NOTIFICAR ALARMA", "CRITICA", 0);
-            default: ("OCIOSO", "NINGUNA", infinite);
-        }
-    }
-    if (port == 3) {
-        // Llegó una confirmación del enfermero
-        if (alarmaActiva == "CRITICA") {
-            ("OCIOSO", "NINGUNA", infinite);
-        }
-    }
-δint((fase, alarmaActiva, σ)) = 
-    switch (alarmaActiva) {
-        case "BAJA": ("OCIOSO", "NINGUNA", infinite);
-        case "MEDIA": ("OCIOSO", "NINGUNA", infinite);
-        case "CRITICA": 
-            if (fase == "NOTIFICAR_ALARMA") {
-                // Estamos notificando la alarma crítica por primera vez. Esperamos confirmación durante 30 segundos
-                ("ESPERANDO CONFIRMACIÓN", "CRITICA", 30);
+X = {alarmaBaja}            x {In 0}
+  ∪ {alarmaMedia}           x {In 1}
+  ∪ {alarmaCritica}         x {In 2}
+  ∪ {confirmEnfermero}      x {In 3}
+
+Y = {"BAJA", "MEDIA", "CRITICA"} x {Out 0}
+
+S = {"OCIOSO", "NOTIFICAR ALARMA", "ESPERANDO CONFIRMACION", "REPETIR ALARMA"}
+  × {"NINGUNA", "BAJA", "MEDIA", "CRITICA"}
+  × ℝ⁺∪{∞}
+  [fase, alarmaActiva, σ]
+
+ta(fase, alarmaActiva, σ) = σ
+
+δext((fase, alarmaActiva, σ), e, (event, port)) =
+    switch (port) {
+        // Cada puerto corresponde a un único tipo de alarma; no es necesario leer event
+        case 0: ("NOTIFICAR ALARMA", "BAJA",    0)
+        case 1: ("NOTIFICAR ALARMA", "MEDIA",   0)
+        case 2: ("NOTIFICAR ALARMA", "CRITICA", 0)
+        case 3:
+            // Confirmación del enfermero
+            if (alarmaActiva == "CRITICA") {
+                ("OCIOSO", "NINGUNA", ∞)        // silenciar alarma crítica
             }
-            else if (fase == "ESPERANDO CONFIRMACION") {
-                // Pasaron 30 segundos sin confirmación. Empezamos a repetir la alarma
-                ("REPETIR ALARMA", "CRITICA", 10);
-            }
-            else if (fase == "REPETIR ALARMA") {
-                ("REPETIR ALARMA", "CRITICA", 10);
+            else {
+                (fase, alarmaActiva, σ - e)     // no hay alarma crítica activa; ignorar
             }
     }
-λ((fase, alarmaActiva, σ)) = 
-    if (fase == "NOTIFICAR ALARMA" || fase == "REPETIR ALARMA" || fase == "ESPERANDO_CONFIRMACION") {
-        // Emitimos la alarma cuando se agota el tiempo en alguna de las etapas de alerta (no ociosas)
-        (alarmaActiva, 0) 
+
+δint(fase, alarmaActiva, σ) =
+    switch (fase) {
+        case "NOTIFICAR ALARMA":
+            switch (alarmaActiva) {
+                case "BAJA":
+                case "MEDIA":
+                    // Alarmas no críticas: se notifican una sola vez y el módulo vuelve a ocioso
+                    ("OCIOSO", "NINGUNA", ∞)
+                case "CRITICA":
+                    // Primera notificación emitida → esperar confirmación del enfermero por 30 s
+                    ("ESPERANDO CONFIRMACION", "CRITICA", 30)
+            }
+        case "ESPERANDO CONFIRMACION":
+            // Pasaron 30 s sin confirmación → volver a notificar inmediatamente (σ = 0)
+            ("REPETIR ALARMA", "CRITICA", 0)
+        case "REPETIR ALARMA":
+            // Repetir la notificación cada 10 s hasta recibir confirmación
+            ("REPETIR ALARMA", "CRITICA", 10)
+    }
+
+λ(fase, alarmaActiva, σ) =
+    if (fase == "NOTIFICAR ALARMA" || fase == "REPETIR ALARMA") {
+        // En ESPERANDO CONFIRMACION no se emite: solo se aguarda al enfermero
+        (alarmaActiva, Out 0)
     }
     else {
-        NADA
+        ∅
     }
-ta((fase, alarmaActiva, σ)) = σ
