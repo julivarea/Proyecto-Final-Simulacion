@@ -59,7 +59,7 @@ S = {"OCIOSO", "NORMAL", "CONTROLAR DESVIO", "ALERTA MEDIA", "BOLSA AGOTADA", "E
         case 2:
             // Recibimos una señal de fin de bolsa
             if (fase != "ESTADO CRITICO" && fase != "OCIOSO") {
-                 ("EMITIR SALIDA", caudalObjetivo, caudalReal, tiempoConDesvio, 60.0, 0, ("alarmaBaja", 2));
+                 ("EMITIR SALIDA", caudalObjetivo, caudalReal, tiempoConDesvio, 60.0, 0 ("alarmaBaja", 2));
             }
             else {
                 (fase, caudalObjetivo, caudalReal, tiempoConDesvio, nuevoTiempoBolsa, σ - elapsedTime, eventoAEmitir);
