@@ -104,6 +104,7 @@ ta(fase, caudalObjetivo, caudalReal, tiempoConDesvio, tiempoBolsa, σ, eventoAEm
     }
 
 δint(fase, caudalObjetivo, caudalReal, tiempoConDesvio, tiempoBolsa, σ, eventoAEmitir) =
+    tiempoBolsaNuevo = (tiempoBolsa == ∞) ? ∞ : tiempoBolsa - σ
     switch (fase) {
         case "EMITIR SALIDA":
             switch (eventoAEmitir.puerto) {
@@ -135,10 +136,23 @@ ta(fase, caudalObjetivo, caudalReal, tiempoConDesvio, tiempoBolsa, σ, eventoAEm
             }
         case "CONTROLAR DESVIO":
             // El desvío de 10% persistió 5 s → emitir alarma media
-            ("EMITIR SALIDA", caudalObjetivo, caudalReal, tiempoConDesvio + σ, tiempoBolsa, 0, ("alarmaMedia", 3))
+            if (tiempoBolsaNuevo == 0) {
+                // Se llegó a la transición interna porque la bolsa llegó a 0 antes de los 5 segundos?
+                ("EMITIR SALIDA", caudalObjetivo, caudalReal, 0, 0, 0, ("detenerBomba", 1))
+            }
+            else {
+                // Se llegó a la transición por haber pasado los 5 segundos completos.
+                ("EMITIR SALIDA", caudalObjetivo, caudalReal, tiempoConDesvio + σ, tiempoBolsaNuevo, 0, ("alarmaMedia", 3))
+            }
         case "ALERTA MEDIA":
-            // El desvío persistió 10 s en total → emitir alarma crítica
-            ("EMITIR SALIDA", caudalObjetivo, caudalReal, tiempoConDesvio + 5.0, tiempoBolsa, 0, ("alarmaCritica", 4))
+            if (tiempoBolsaNuevo == 0) {
+                // Se llegó acá porque se agotó la bolsa
+                ("EMITIR SALIDA", caudalObjetivo, caudalReal, 0, 0, 0, ("detenerBomba", 1))
+            }
+            else {
+                // El desvío persistió 10 s en total → emitir alarma crítica
+                ("EMITIR SALIDA", caudalObjetivo, caudalReal, tiempoConDesvio + 5.0, tiempoBolsaNuevo, 0, ("alarmaCritica", 4)) 
+            }
         case "BOLSA AGOTADA":
             // Se agotó la bolsa → detener la bomba
             ("EMITIR SALIDA", caudalObjetivo, caudalReal, 0, 0, 0, ("detenerBomba", 1))
