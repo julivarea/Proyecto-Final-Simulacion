@@ -1,0 +1,683 @@
+\documentclass[12pt,a4paper,oneside]{report}
+
+% ============================================================================
+% PREAMBLE
+% ============================================================================
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{setspace}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{parskip}
+
+% Configuración de hipervínculos
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue,
+    bookmarksnumbered=true
+}
+
+% Configuración de código
+\lstset{
+    language=XML,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny,
+    showstringspaces=false
+}
+
+% Espaciado
+\onehalfspacing
+
+% Encabezado y pie de página
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Proyecto de Simulación - Bomba de Infusión}
+\lhead{Grupo: A. Alieni \& J. Varea}
+\cfoot{\thepage}
+
+% ============================================================================
+% DOCUMENTO PRINCIPAL
+% ============================================================================
+\begin{document}
+
+% ============================================================================
+% PORTADA
+% ============================================================================
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+    
+    {\Large \textbf{UNIVERSIDAD NACIONAL DE RÍO CUARTO}}
+    
+    {\large Facultad de Ciencias Exactas, Físico-Químicas y Naturales}
+    
+    {\large Departamento de Computación}
+    
+    \vspace{2cm}
+    
+    {\Large \textbf{Proyecto de Simulación}}
+    
+    \vspace{1.5cm}
+    
+    {\huge \textbf{Simulador DEVS de Controlador Simplificado}}
+    
+    {\LARGE \textbf{de Bomba de Infusión Intravenosa}}
+    
+    \vspace{2cm}
+    
+    {\large \textbf{Autores:}}
+    
+    {\large Agustín Alieni}
+    
+    {\large Julián Varea}
+    
+    \vspace{1cm}
+    
+    {\large \textbf{Profesor:} Ariel González}
+    
+    \vspace{2cm}
+    
+    {\large Año Académico: 2026}
+    
+    \vspace{2cm}
+    
+    \textbf{Resumen}
+    
+    \small{
+    Este trabajo presenta la especificación formal en el formalismo DEVS (Discrete Event System Specification) y la implementación de un controlador simplificado para una bomba de infusión intravenosa. Se modela el sistema considerando escenarios normales de funcionamiento y escenarios de falla, verificando el cumplimiento de los requisitos temporales especificados. El objetivo principal es estudiar el comportamiento temporal del sistema y validar que las acciones de control ocurran dentro de los tiempos establecidos.
+    }
+    
+    \vfill
+    
+    \today
+    
+\end{titlepage}
+
+% ============================================================================
+% TABLA DE CONTENIDOS
+% ============================================================================
+\tableofcontents
+\newpage
+
+% ============================================================================
+% INTRODUCCIÓN
+% ============================================================================
+\chapter{Introducción}
+
+Este proyecto aborda la modelación y simulación de un sistema automático de administración de medicación intravenosa mediante una bomba de infusión. El controlador debe garantizar que la infusión se realice de acuerdo con las órdenes médicas, detectar desviaciones y reaccionar ante condiciones de falla.
+
+El formalismo DEVS (Discrete Event System Specification) proporciona una base matemática rigurosa para especificar sistemas de eventos discretos. En este trabajo se utiliza para modelar el comportamiento del controlador de la bomba, considerando sus transiciones de estado internas y externas, así como sus salidas.
+
+\section{Objetivos}
+
+\begin{enumerate}
+    \item Especificar formalmente el sistema de control mediante DEVS.
+    \item Implementar el modelo atómico del controlador de bomba.
+    \item Simular escenarios normales y de falla.
+    \item Verificar el cumplimiento de los requisitos temporales.
+    \item Proponer mejoras al controlador para reducir riesgos.
+\end{enumerate}
+
+% ============================================================================
+% DESCRIPCIÓN DEL SISTEMA
+% ============================================================================
+\chapter{Descripción del Sistema}
+
+\section{Componentes del Sistema}
+
+El sistema de control de la bomba de infusión está compuesto por los siguientes módulos:
+
+\begin{itemize}
+    \item \textbf{Generador de Órdenes Médicas}: Produce eventos con el caudal objetivo.
+    \item \textbf{Sensor de Flujo}: Mide periódicamente el caudal real administrado.
+    \item \textbf{Controlador de Bomba}: Núcleo del sistema, gestiona la infusión y alarmas.
+    \item \textbf{Actuador de la Bomba}: Modifica el caudal real en respuesta a órdenes.
+    \item \textbf{Módulo de Alarmas}: Gestiona notificaciones visuales y sonoras.
+\end{itemize}
+
+\section{Entradas del Sistema}
+
+\begin{description}
+    \item[\texttt{ordenMedica}] Caudal objetivo en ml/h (0--200 ml/h). Caudal 0 indica detención.
+    \item[\texttt{sensorFlujo}] Medición del caudal real administrado (período: 1 segundo).
+    \item[\texttt{finBolsa}] Indicación de que la bolsa de medicación está próxima a agotarse.
+    \item[\texttt{confirmacionEnfermero}] Confirmación de una alarma por personal médico.
+\end{description}
+
+\section{Salidas del Sistema}
+
+\begin{description}
+    \item[\texttt{ajustarCaudal}] Orden para modificar el caudal de infusión.
+    \item[\texttt{detenerBomba}] Orden para detener la infusión.
+    \item[\texttt{alarmaBaja}] Notificación preventiva o de baja criticidad.
+    \item[\texttt{alarmaMedia}] Notificación por desviaciones sostenidas.
+    \item[\texttt{alarmaCritica}] Notificación que requiere atención inmediata.
+    \item[\texttt{registrarEvento}] Registro del evento en el sistema.
+\end{description}
+
+\section{Requisitos Temporales}
+
+\begin{enumerate}
+    \item La infusión debe comenzar en menos de \textbf{3 segundos} tras recibir una orden con caudal $> 0$.
+    \item El sensor debe informar cada \textbf{1 segundo}.
+    \item Si el caudal real difiere $> 10\%$ durante $> 5$ segundos $\Rightarrow$ \textbf{alarmaMedia}.
+    \item Si el desvío persiste $> 10$ segundos $\Rightarrow$ \textbf{alarmaCritica} y detención.
+    \item Alarma crítica no confirmada $\Rightarrow$ repetición cada \textbf{10 segundos}.
+    \item Fin de bolsa $\Rightarrow$ detención automática en máximo \textbf{60 segundos}.
+    \item Latencia del actuador: máximo \textbf{0.5 segundos}.
+\end{enumerate}
+
+% ============================================================================
+% ESPECIFICACIÓN DEVS
+% ============================================================================
+\chapter{Especificación DEVS}
+
+\section{Formalismo DEVS}
+
+El formalismo DEVS describe un modelo mediante la tupla:
+
+\[
+M = \langle X, Y, S, \delta_{\text{int}}, \delta_{\text{ext}}, \lambda, t_a \rangle
+\]
+
+Donde:
+\begin{itemize}
+    \item $X$: conjunto de eventos de entrada
+    \item $Y$: conjunto de eventos de salida
+    \item $S$: conjunto de estados
+    \item $\delta_{\text{int}} : S \to S$: función de transición interna
+    \item $\delta_{\text{ext}} : Q \times X \to S$: función de transición externa
+    \item $\lambda : S \to Y$: función de salida
+    \item $t_a : S \to \mathbb{R}^+_0 \cup \{\infty\}$: función de tiempo de avance
+\end{itemize}
+
+\section{Controlador de Bomba de Infusión}
+
+El componente central del sistema es el controlador de bomba. A continuación se especifica formalmente.
+
+\subsection{Eventos de Entrada}
+
+\[
+X = (R^+_0 \times \{0\}) \cup (R^+_0 \times \{1\}) \cup (\{\text{finBolsa}\} \times \{2\}) \cup (\{\text{confirmacionEnfermero}\} \times \{3\})
+\]
+
+\begin{description}
+    \item[Puerto 0:] \texttt{ordenMedica}: valor en $[0, 200]$ ml/h
+    \item[Puerto 1:] \texttt{sensorFlujo}: valor de caudal real medido
+    \item[Puerto 2:] \texttt{finBolsa}: evento de agotamiento de bolsa
+    \item[Puerto 3:] \texttt{confirmacionEnfermero}: confirmación de alarma
+\end{description}
+
+\subsection{Eventos de Salida}
+
+\[
+\begin{aligned}
+Y = &(\{\text{ajustarCaudal}\} \times \{0\})
+\cup (\{\text{detenerBomba}\} \times \{1\})
+\cup (\{\text{alarmaBaja}\} \times \{2\}) \\
+&\cup (\{\text{alarmaMedia}\} \times \{3\})
+\cup (\{\text{alarmaCritica}\} \times \{4\})
+\cup (\{\text{registrarEvento}\} \times \{5\})
+\end{aligned}
+\]
+
+\subsection{Conjunto de Estados}
+
+\[
+S = [0, 200] \times [0, 200] \times \mathbb{R}^+_0 \times \{0, 1\} \times \mathbb{R}^+_0 \times \text{Fases} \times \mathbb{R}^+_0 \cup \{\infty\}
+\]
+
+Un estado se denota como:
+\[
+s = (\text{caudalObjetivo}, \text{caudalReal}, \text{tiempoDesvio}, \text{estadoBolsa}, \text{tiempoBolsa}, \text{fase}, \sigma)
+\]
+
+\begin{description}
+    \item[\texttt{caudalObjetivo}] Caudal objetivo en ml/h.
+    \item[\texttt{caudalReal}] Caudal real medido por el sensor.
+    \item[\texttt{tiempoDesvio}] Tiempo acumulado de desvío
+    \item[\texttt{estadoBolsa}] Estado de la bolsa: $0$ = normal, $1$ = casi vacía.
+    \item[\texttt{tiempoBolsa}] Tiempo transcurrido desde el evento de fin de bolsa.
+    \item[\texttt{fase}] Fase actual del controlador.
+    \item[\texttt{sigma}] Tiempo de avance ($\infty$ si no hay transición programada).
+\end{description}
+
+\subsubsection{Fases del Sistema}
+
+\[
+\text{Fases} =
+\left\{
+\begin{array}{l}
+\text{DETENIDA},\ \text{PROCESANDO\_INICIO},\ \text{MONITOREANDO},\\
+\text{EMITIR\_ALARMA\_MEDIA},\ \text{ESPERANDO\_CORRECCION},\\
+\text{EMITIR\_ALARMA\_CRITICA},\ \text{PROCESANDO\_DETENCION},\\
+\text{ESPERANDO\_CONFIRMACION},\ \text{EMITIR\_ALARMA\_BAJA}
+\end{array}
+\right\}
+\]
+
+\subsection{Estado Inicial}
+
+\[
+s_0 = (0, 0, 0, 0, 0, \text{DETENIDA}, \infty)
+\]
+
+\subsection{Función de Transición Externa}
+
+La función $\delta_{\text{ext}}$ define cómo el sistema reacciona ante eventos externos. Se especifica por casos según el puerto de entrada:
+
+\subsubsection{Puerto 0: Órdenes Médicas}
+
+\begin{enumerate}
+    \item \textbf{Inicio de infusión} ($X_v > 0$):
+    \[
+    \delta_{\text{ext}} = (X_v, \text{caudalReal}, 0, 0, 0, \text{PROCESANDO\_INICIO}, U(0, 2))
+    \]
+    Latencia del actuador: distribución uniforme en $[0, 2]$ segundos.
+    
+    \item \textbf{Detención de infusión} ($X_v = 0$):
+    \[
+    \delta_{\text{ext}} = (0, \text{caudalReal}, 0, 0, 0, \text{PROCESANDO\_DETENCION}, 0)
+    \]
+\end{enumerate}
+
+\subsubsection{Puerto 1: Sensor de Flujo}
+
+El sensor informa el caudal real cada 1 segundo. Se definen las siguientes transiciones:
+
+\begin{enumerate}
+    \item \textbf{Caudal dentro de tolerancia} (diferencia $\leq 10\%$):
+    \[
+    \begin{aligned}
+    \delta_{\text{ext}} = (&\text{caudalObjetivo}, X_v, 0, \text{estadoBolsa}, \\
+    &\text{estadoBolsa} \cdot (\text{tiempoBolsa} + e), \text{MONITOREANDO}, \infty)
+    \end{aligned}
+    \]
+    \textit{Condiciones:} $|\text{caudalObjetivo} - X_v| \leq \text{caudalObjetivo} \cdot 0.1$, $\text{caudalObjetivo} > 0$, $\text{estadoBolsa} = 0 \vee \text{tiempoBolsa} + e \leq 60$.
+    
+    \item \textbf{Caudal fuera de tolerancia, tiempo $\leq 5$ segundos}:
+    \[
+    \begin{aligned}
+    \delta_{\text{ext}} = (&\text{caudalObjetivo}, X_v, \text{tiempoDesvio} + e, \text{estadoBolsa}, \\
+    &\text{estadoBolsa} \cdot (\text{tiempoBolsa} + e), \text{MONITOREANDO}, \infty)
+    \end{aligned}
+    \]
+    \textit{Condiciones:} $|\text{caudalObjetivo} - X_v| > \text{caudalObjetivo} \cdot 0.1$, $\text{tiempoDesvio} + e \leq 5$, $\text{caudalObjetivo} > 0$, $\text{fase} = \text{MONITOREANDO}$, $\text{estadoBolsa} = 0 \vee \text{tiempoBolsa} + e \leq 60$.
+    
+    \item \textbf{Caudal fuera de tolerancia, tiempo $> 5$ segundos} $\Rightarrow$ \textbf{Alarma Media}:
+    \[
+    \begin{aligned}
+    \delta_{\text{ext}} = (&\text{caudalObjetivo}, X_v, \text{tiempoDesvio} + e, \text{estadoBolsa}, \\
+    &\text{estadoBolsa} \cdot (\text{tiempoBolsa} + e), \text{EMITIR\_ALARMA\_MEDIA}, 0)
+    \end{aligned}
+    \]
+    \textit{Condiciones:} $|\text{caudalObjetivo} - X_v| > \text{caudalObjetivo} \cdot 0.1$, $\text{tiempoDesvio} + e > 5$, $\text{caudalObjetivo} > 0$, $\text{fase} = \text{MONITOREANDO}$, $\text{estadoBolsa} = 0 \vee \text{tiempoBolsa} + e \leq 60$.
+    
+    \item \textbf{Esperando corrección, desvío $\leq 10$ segundos}:
+    \[
+    \begin{aligned}
+    \delta_{\text{ext}} = (&\text{caudalObjetivo}, X_v, \text{tiempoDesvio} + e, \text{estadoBolsa}, \\
+    &\text{estadoBolsa} \cdot (\text{tiempoBolsa} + e), \text{ESPERANDO\_CORRECCION}, \infty)
+    \end{aligned}
+    \]
+    \textit{Condiciones:} $|\text{caudalObjetivo} - X_v| > \text{caudalObjetivo} \cdot 0.1$, $\text{tiempoDesvio} + e \leq 10$, $\text{caudalObjetivo} > 0$, $\text{fase} = \text{ESPERANDO\_CORRECCION}$, $\text{estadoBolsa} = 0 \vee \text{tiempoBolsa} + e \leq 60$.
+    
+    \item \textbf{Desvío persiste $> 10$ segundos} $\Rightarrow$ \textbf{Alarma Crítica}:
+    \[
+    \begin{aligned}
+    \delta_{\text{ext}} = (&0, X_v, \text{tiempoDesvio} + e, \text{estadoBolsa}, \\
+    &\text{estadoBolsa} \cdot (\text{tiempoBolsa} + e), \text{EMITIR\_ALARMA\_CRITICA}, 0)
+    \end{aligned}
+    \]
+    \textit{Condiciones:} $|\text{caudalObjetivo} - X_v| > \text{caudalObjetivo} \cdot 0.1$, $\text{tiempoDesvio} + e > 10$, $\text{caudalObjetivo} > 0$, $\text{fase} = \text{ESPERANDO\_CORRECCION}$, $\text{estadoBolsa} = 0 \vee \text{tiempoBolsa} + e \leq 60$.
+    
+    \item \textbf{Sensor con caudal objetivo cero}:
+    \[
+    \delta_{\text{ext}} = (0, X_v, 0, \text{estadoBolsa}, \text{tiempoBolsa}, \text{fase}, \infty)
+    \]
+    \textit{Condiciones:} $\text{caudalObjetivo} = 0$.
+    
+    \item \textbf{Fin de bolsa: detención forzada a los 60 segundos}:
+    \[
+    \begin{aligned}
+    \delta_{\text{ext}} = (&0, X_v, \text{tiempoDesvio} + e, 1, \text{tiempoBolsa} + e, \\
+    &\text{PROCESANDO\_DETENCION}, 0)
+    \end{aligned}
+    \]
+    \textit{Condiciones:} $\text{estadoBolsa} = 1$, $\text{tiempoBolsa} + e > 60$, $\text{caudalObjetivo} > 0$.
+\end{enumerate}
+
+\subsubsection{Puerto 2: Fin de Bolsa}
+
+\[
+\delta_{\text{ext}} = (\text{caudalObjetivo}, \text{caudalReal}, \text{tiempoDesvio} + e, 1, 0, \text{EMITIR\_ALARMA\_BAJA}, 0)
+\]
+\textit{Condiciones:} $\text{caudalObjetivo} > 0$.
+
+\subsubsection{Puerto 3: Confirmación del Enfermero}
+
+\[
+\delta_{\text{ext}} = (0, X_v, 0, 0, 0, \text{DETENIDA}, \infty)
+\]
+\textit{Condiciones:} $\text{fase} = \text{ESPERANDO\_CONFIRMACION}$.
+
+\subsection{Función de Transición Interna}
+
+La función $\delta_{\text{int}}$ define las transiciones automáticas cuando el tiempo de avance $\sigma$ expira:
+
+\begin{enumerate}
+    \item \textbf{Fin de procesamiento de inicio}:
+    \[
+    \begin{aligned}
+    \delta_{\text{int}} = (&\text{caudalObjetivo},
+    \text{caudalReal},
+    \text{tiempoDesvio},\\
+    &\text{estadoBolsa},
+    \text{tiempoBolsa},
+    \text{MONITOREANDO},
+    \infty)
+    \end{aligned}
+    \]
+    \textit{Condiciones:} $\text{fase} = \text{PROCESANDO\_INICIO}$.
+    
+    \item \textbf{Fin de procesamiento de detención}:
+    \[
+    \begin{aligned}
+    \delta_{\text{int}} = (&\text{caudalObjetivo},
+    \text{caudalReal},
+    \text{tiempoDesvio},\\
+    &\text{estadoBolsa},
+    \text{tiempoBolsa},
+    \text{DETENIDA},
+    \infty)
+    \end{aligned}
+    \]
+    \textit{Condiciones:} $\text{fase} = \text{PROCESANDO\_DETENCION}$.
+    
+    \item \textbf{Emisión de alarma media completada}:
+    \[
+    \begin{aligned}
+    \delta_{\text{int}} = (&\text{caudalObjetivo},
+    \text{caudalReal},
+    \text{tiempoDesvio},\\
+    &\text{estadoBolsa},
+    \text{tiempoBolsa},
+    \text{ESPERANDO\_CORRECCION},
+    \infty)
+    \end{aligned}
+    \]
+    \textit{Condiciones:} $\text{fase} = \text{EMITIR\_ALARMA\_MEDIA}$.
+    
+    \item \textbf{Emisión de alarma crítica completada}:
+    \[
+    \begin{aligned}
+    \delta_{\text{int}} = (&\text{caudalObjetivo},
+    \text{caudalReal},
+    \text{tiempoDesvio},\\
+    &\text{estadoBolsa},
+    \text{tiempoBolsa},
+    \text{ESPERANDO\_CONFIRMACION},
+    \infty)
+    \end{aligned}
+    \]
+    \textit{Condiciones:} $\text{fase} = \text{EMITIR\_ALARMA\_CRITICA}$.
+    
+    \item \textbf{Emisión de alarma baja completada}:
+    \[
+    \begin{aligned}
+    \delta_{\text{int}} = (&\text{caudalObjetivo},
+    \text{caudalReal},
+    \text{tiempoDesvio},\\
+    &\text{estadoBolsa},
+    \text{tiempoBolsa},
+    \text{MONITOREANDO},
+    \infty)
+    \end{aligned}
+    \]
+    \textit{Condiciones:} $\text{fase} = \text{EMITIR\_ALARMA\_BAJA}$.
+\end{enumerate}
+
+\subsection{Función de Salida}
+
+La función $\lambda$ genera los eventos de salida según la fase actual:
+
+\[
+\lambda(s) = \begin{cases}
+(\text{ajustarCaudal}, 0) & \text{si } \text{fase} = \text{PROCESANDO\_INICIO} \\
+(\text{detenerBomba}, 1) & \text{si } \text{fase} = \text{PROCESANDO\_DETENCION} \\
+(\text{alarmaBaja}, 2) & \text{si } \text{fase} = \text{EMITIR\_ALARMA\_BAJA} \\
+(\text{alarmaMedia}, 3) & \text{si } \text{fase} = \text{EMITIR\_ALARMA\_MEDIA} \\
+(\text{alarmaCritica}, 4) & \text{si } \text{fase} = \text{EMITIR\_ALARMA\_CRITICA} \\
+(\text{registrarEvento}, 5) & \text{siempre (evento de auditoria)}
+\end{cases}
+\]
+
+\textit{Nota:} La salida de \texttt{registrarEvento} representa un evento de auditoría del sistema. Su modelado y procesamiento detallado se difiere a trabajos futuros.
+
+\subsection{Función de Tiempo de Avance}
+
+\[
+t_a(s) = \sigma
+\]
+
+El tiempo de avance se determina según la fase del controlador y las condiciones de entrada.
+
+\newpage
+
+% ============================================================================
+% ESQUELETOS DE OTROS MODELOS DEVS
+% ============================================================================
+\section{Generador de Órdenes Médicas}
+
+\subsection{Especificación Formal}
+
+\[
+G = \langle X_G, Y_G, S_G, \delta_{\text{int},G}, \delta_{\text{ext},G}, \lambda_G, t_{a,G} \rangle
+\]
+
+\textbf{A completar por el grupo:}
+
+\begin{itemize}
+    \item Definir el conjunto de entrada $X_G$ (si aplica).
+    \item Definir el conjunto de salida $Y_G$ con el evento \texttt{ordenMedica}.
+    \item Definir el conjunto de estados $S_G$.
+    \item Especificar $\delta_{\text{int},G}$ y $\delta_{\text{ext},G}$.
+    \item Especificar $\lambda_G$.
+    \item Especificar $t_{a,G}$.
+\end{itemize}
+
+\noindent\rule{\textwidth}{0.5pt}
+
+\section{Sensor de Flujo}
+
+\subsection{Especificación Formal}
+
+\[
+\text{Sensor} = \langle X_{\text{Sensor}}, Y_{\text{Sensor}}, S_{\text{Sensor}}, \delta_{\text{int},\text{Sensor}}, \delta_{\text{ext},\text{Sensor}}, \lambda_{\text{Sensor}}, t_{a,\text{Sensor}} \rangle
+\]
+
+\textbf{Componentes principales:}
+
+\begin{description}
+    \item[Entrada:] Evento \texttt{caudalActual} desde el actuador.
+    \item[Salida:] Evento \texttt{sensorFlujo} que informa el caudal real cada 1 segundo.
+    \item[Período de muestreo:] 1 segundo.
+\end{description}
+
+\textbf{A completar por el grupo:}
+
+\begin{itemize}
+    \item Definir $X_{\text{Sensor}}$ y $Y_{\text{Sensor}}$.
+    \item Definir $S_{\text{Sensor}}$ y estado inicial.
+    \item Especificar las funciones de transición.
+    \item Especificar la función de tiempo de avance.
+\end{itemize}
+
+\noindent\rule{\textwidth}{0.5pt}
+
+\section{Actuador de la Bomba}
+
+\subsection{Especificación Formal}
+
+\[
+\text{Actuador} = \langle X_{\text{Act}}, Y_{\text{Act}}, S_{\text{Act}}, \delta_{\text{int},\text{Act}}, \delta_{\text{ext},\text{Act}}, \lambda_{\text{Act}}, t_{a,\text{Act}} \rangle
+\]
+
+\textbf{Componentes principales:}
+
+\begin{description}
+    \item[Entrada:] Eventos \texttt{ajustarCaudal} y \texttt{detenerBomba} desde el controlador.
+    \item[Salida:] Evento \texttt{caudalActual} que informa el caudal real administrado.
+    \item[Latencia:] Máximo 0.5 segundos para aplicar cambios.
+\end{description}
+
+\textbf{A completar por el grupo:}
+
+\begin{itemize}
+    \item Definir $X_{\text{Act}}$ y $Y_{\text{Act}}$.
+    \item Definir $S_{\text{Act}}$ y estado inicial.
+    \item Especificar cómo se modela la latencia del actuador.
+    \item Especificar las funciones de transición.
+    \item Especificar la función de tiempo de avance.
+\end{itemize}
+
+\noindent\rule{\textwidth}{0.5pt}
+
+\section{Módulo de Alarmas}
+
+\subsection{Especificación Formal}
+
+\[
+\text{Alarmas} = \langle X_{\text{Alarm}}, Y_{\text{Alarm}}, S_{\text{Alarm}}, \delta_{\text{int},\text{Alarm}}, \delta_{\text{ext},\text{Alarm}}, \lambda_{\text{Alarm}}, t_{a,\text{Alarm}} \rangle
+\]
+
+\textbf{Componentes principales:}
+
+\begin{description}
+    \item[Entrada:] Eventos \texttt{alarmaBaja}, \texttt{alarmaMedia}, \texttt{alarmaCritica} y \texttt{confirmacionEnfermero}.
+    \item[Salida:] Evento \texttt{notificacionAlarma}.
+    \item[Requisito temporal:] Repetir alarmas críticas cada 10 segundos si no son confirmadas en 30 segundos.
+\end{description}
+
+\textbf{A completar por el grupo:}
+
+\begin{itemize}
+    \item Definir $X_{\text{Alarm}}$ y $Y_{\text{Alarm}}$.
+    \item Definir $S_{\text{Alarm}}$ con estados para cada nivel de alarma.
+    \item Especificar el mecanismo de repetición de alarmas críticas.
+    \item Especificar las funciones de transición.
+    \item Especificar la función de tiempo de avance.
+\end{itemize}
+
+\noindent\rule{\textwidth}{0.5pt}
+
+% ============================================================================
+% CAPÍTULO DE ESCENARIOS
+% ============================================================================
+\chapter{Escenarios de Simulación}
+
+\section{Escenario 1: Funcionamiento Normal}
+
+Se simula una infusión normal sin desviaciones significativas del caudal.
+
+\textbf{Descripción:}
+\begin{itemize}
+    \item Orden médica inicial: 100 ml/h.
+    \item El sensor reporta valores dentro de $\pm 10\%$ del objetivo.
+    \item Duración: 60 segundos sin incidentes.
+\end{itemize}
+
+\section{Escenario 2: Cambio de Orden Médica}
+
+Se modifica la orden durante la infusión.
+
+\textbf{Descripción:}
+\begin{itemize}
+    \item Orden inicial: 50 ml/h durante 30 segundos.
+    \item Nueva orden: 80 ml/h durante 30 segundos.
+\end{itemize}
+
+\section{Escenario 3: Detención de Infusión}
+
+Se simula la recepción de una orden con caudal cero.
+
+\textbf{Descripción:}
+\begin{itemize}
+    \item Orden inicial: 100 ml/h.
+    \item Orden de detención (caudal = 0) a los 30 segundos.
+    \item Verificar detención en menos de 3 segundos.
+\end{itemize}
+
+\section{Escenario 4: Desvío Leve Corregido}
+
+Se simula un desvío de caudal que es corregido automáticamente.
+
+\section{Escenario 5: Desvío Mayor al 10\% Generador Alarma Media}
+
+Se simula un desvío sostenido mayor al 10\% durante más de 5 segundos.
+
+\section{Escenario 6: Fin de Bolsa}
+
+Se simula la detección de fin de bolsa y la detención automática.
+
+\section{Escenario 7: Alarma Crítica No Confirmada}
+
+Se simula la repetición de alarmas críticas no confirmadas cada 10 segundos.
+
+% ============================================================================
+% CAPÍTULO DE RESULTADOS
+% ============================================================================
+\chapter{Resultados de Simulación}
+
+\textit{Este capítulo contendrá las trazas de simulación, gráficos de caudal, eventos de alarma y análisis del cumplimiento de requisitos temporales.}
+
+\section{Análisis de Requisitos Temporales}
+
+A completar con los resultados de simulación.
+
+% ============================================================================
+% CONCLUSIONES
+% ============================================================================
+\chapter{Conclusiones}
+
+\textit{A completar con las conclusiones del proyecto.}
+
+\section{Cumplimiento de Requisitos}
+
+\section{Mejoras Propuestas}
+
+% ============================================================================
+% REFERENCIAS
+% ============================================================================
+\begin{thebibliography}{99}
+
+\bibitem{Zeigler2000}
+Zeigler, B. P., Kim, T. G., \& Praehofer, H. (2000). \textit{Theory of Modeling and Simulation: Integrating Discrete Event and Continuous Complex Dynamic Systems}. Academic Press.
+
+\bibitem{DEVS2007}
+Zeigler, B. P. (2007). DEVS, its history, its role in M\&S. \textit{Proceedings of the 2007 Spring Simulation Multiconference}.
+
+\bibitem{PowerDEVS}
+PowerDEVS Documentation. Disponible en: \url{http://www.powerdevs.org}
+
+\end{thebibliography}
+
+\end{document} 
