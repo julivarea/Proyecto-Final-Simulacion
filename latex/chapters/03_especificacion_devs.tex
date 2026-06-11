@@ -1,0 +1,127 @@
+\section{Decisiones de Diseño y Arquitectura}
+
+Para que la simulación de este sistema de infusión sea realista y permita evaluar correctamente las condiciones de falla requeridas (como el desvío del 10\% del caudal), se tomaron decisiones de diseño fundamentales que extienden la propuesta básica:
+
+\subsection{Arquitectura de Lazo Cerrado (Closed-Loop)}
+El flujo de datos se estructuró separando claramente la orden ideal de la realidad física:
+\begin{itemize}
+    \item El \textbf{Controlador} no asume que la bomba funciona perfecto. Le envía el \texttt{caudalObjetivo} al \textbf{Actuador}.
+    \item El \textbf{Actuador} procesa esa orden aplicándole un retraso mecánico y establece el \texttt{caudalReal} físico.
+    \item El \textbf{Sensor de Flujo} lee ese \texttt{caudalReal}, le aplica un ruido o error de medición esperado en cualquier instrumento, y le devuelve el \texttt{caudalMedido} al \textbf{Controlador}.
+\end{itemize}
+Gracias a esta realimentación, el Controlador puede comparar la orden original con lo que el sensor está midiendo, y así detectar discrepancias para disparar las alarmas media o crítica.
+
+\subsection{Modelado Estocástico de Eventos}
+Se decidió modelar los eventos externos e impredecibles utilizando distribuciones de probabilidad teóricas:
+\begin{itemize}
+    \item \textbf{Llegada de eventos (Órdenes y Confirmaciones):} Se utiliza una distribución \textbf{Exponencial} para modelar el tiempo entre la llegada de nuevas prescripciones médicas ($G_{om}$) y la intervención del personal de enfermería ($G_{ce}$). Esto asume un Proceso de Poisson, ideal para eventos independientes sin memoria.
+    \item \textbf{Caudal y Latencias:} Se utiliza una distribución \textbf{Uniforme} para el caudal objetivo ($[0, 200]$ ml/h) y para la latencia del actuador ($[0, 0.5]$ s). Esto garantiza que el sistema sea evaluado en todos sus extremos posibles sin sesgar las pruebas hacia un valor particular.
+    \item \textbf{Ruido del Sensor:} Se utiliza una distribución \textbf{Normal} (con una desviación estándar del 20\%) para alterar la lectura del caudal real. Según el Teorema del Límite Central, la suma de pequeñas perturbaciones mecánicas y de sensado tiende a una distribución Gaussiana, lo que forzará al controlador a gestionar desvíos realistas.
+\end{itemize}
+
+\section{Modelos Atómicos Definidos}
+
+\subsection{Generador de Órdenes Médicas ($G_{om}$)}
+Este componente modela la llegada estocástica de nuevas prescripciones médicas que alteran el caudal objetivo de la bomba.
+Matemáticamente, el modelo se define como:
+\[ G_{om} = \langle X_{G_{om}}, Y_{G_{om}}, S_{G_{om}}, \delta_{int}, \delta_{ext}, \lambda, ta \rangle \]
+donde:
+\begin{itemize}
+    \item $X_{G_{om}} = \emptyset$ (No posee puertos de entrada).
+    \item $Y_{G_{om}} = [0, 200] \times \{out\_caudal\_obj\}$
+    \item $S_{G_{om}} = [0, 200] \times \mathbb{R}_{\geq 0}$, donde $s = (caudalObjetivo, \sigma)$.
+    \item $s_0 = (\text{Uniforme}(0, 200), \text{Exponencial}(1 / 300.0))$.
+    \item $\delta_{ext}(s, e, x) = \emptyset$
+    \item \(\delta_{int}(caudalObjetivo, \sigma) = (\text{Uniforme}(0, 200), \text{Exponencial}(1 / 300.0))\).
+    \item \(\lambda(caudalObjetivo, \sigma) = (caudalObjetivo, out\_caudal\_obj)\).
+    \item \(ta(caudalObjetivo, \sigma) = \sigma\).
+\end{itemize}
+
+\subsection{Actuador de la Bomba ($A$)}
+Este componente modela la respuesta física y mecánica de la bomba. Presenta una latencia inherente al motor.
+Matemáticamente, el modelo se define como:
+\[ A = \langle X_A, Y_A, S_A, \delta_{int}, \delta_{ext}, \lambda, ta \rangle \]
+donde:
+\begin{itemize}
+    \item $X_A = ([0, 200] \times \{in\_caudal\_obj\}) \cup (\{detenerBomba\} \times \{in\_stop\})$
+    \item $Y_A = [0, 200] \times \{out\_caudal\_real\}$
+    \item $S_A = [0, 200] \times \mathbb{R}_{\geq 0} \cup \{\infty\}$, donde $s = (caudalReal, \sigma)$.
+    \item $s_0 = (0.0, \infty)$.
+    \item Transición Externa:
+    \[
+    \delta_{ext}((caudalReal, \sigma), e, (Xv, port)) = 
+    \begin{cases} 
+    (Xv, \text{Uniforme}(0, 0.5)) & \text{si } port = in\_caudal\_obj \\
+    (0.0, \text{Uniforme}(0, 0.5)) & \text{si } port = in\_stop 
+    \end{cases}
+    \]
+    \item $\delta_{int}(caudalReal, \sigma) = (caudalReal, \infty)$
+    \item $\lambda(caudalReal, \sigma) = (caudalReal, out\_caudal\_real)$.
+    \item $ta(caudalReal, \sigma) = \sigma$.
+\end{itemize}
+
+\subsection{Sensor de Flujo ($G_{sf}$)}
+Este modelo representa el dispositivo encargado de medir el caudal real. Toma muestras periódicas inyectando un ruido Gaussiano del 20\%.
+Matemáticamente, el modelo se define como:
+\[ G_{sf} = \langle X_{G_{sf}}, Y_{G_{sf}}, S_{G_{sf}}, \delta_{int}, \delta_{ext}, \lambda, ta \rangle \]
+donde:
+\begin{itemize}
+    \item $X_{G_{sf}} = [0, 200] \times \{in\_caudal\_real\}$
+    \item $Y_{G_{sf}} = [0, 200] \times \{out\_caudal\_medido\}$
+    \item $S_{G_{sf}} = [0, 200] \times [0, 200] \times \mathbb{R}_{\geq 0} \cup \{\infty\}$, donde $s = (caudalReal, caudalMedido, \sigma)$.
+    \item $s_0 = (0.0, 0.0, \infty)$.
+    \item Transición Externa (dividida para evitar desbordamiento):
+    \[
+    \delta_{ext}((caudalReal, caudalMedido, \sigma), e, (Xv, port)) = 
+    \]
+    \[
+    \begin{cases} 
+    (Xv, \text{Normal}(Xv, (0.20 \cdot Xv)^2), \sigma - e) \\ 
+    \quad \text{si } port = in\_caudal\_real \land \sigma < \infty \\[2ex]
+    (Xv, \text{Normal}(Xv, (0.20 \cdot Xv)^2), 0.0) \\ 
+    \quad \text{si } port = in\_caudal\_real \land \sigma = \infty
+    \end{cases}
+    \]
+    \item $\delta_{int}(caudalReal, caudalMedido, \sigma) = (caudalReal, \text{Normal}(caudalReal, (0.20 \cdot caudalReal)^2), 1.0)$
+    \item $\lambda(caudalReal, caudalMedido, \sigma) = (caudalMedido, out\_caudal\_medido)$.
+    \item $ta(caudalReal, caudalMedido, \sigma) = \sigma$.
+\end{itemize}
+
+\subsection{Generador de Confirmaciones del Enfermero ($G_{ce}$)}
+Componente que simula los retrasos operativos humanos, enviando la confirmación de la visualización de una alarma.
+Matemáticamente, el modelo se define como:
+\[ G_{ce} = \langle X_{G_{ce}}, Y_{G_{ce}}, S_{G_{ce}}, \delta_{int}, \delta_{ext}, \lambda, ta \rangle \]
+donde:
+\begin{itemize}
+    \item $X_{G_{ce}} = \emptyset$
+    \item $Y_{G_{ce}} = \{confirmacionEnfermero\} \times \{out\_conf\}$
+    \item $S_{G_{ce}} = \mathbb{R}_{\geq 0}$, donde $s = \sigma$.
+    \item $s_0 = \text{Exponencial}(1 / 8.0)$.
+    \item $\delta_{ext}(s, e, x) = \emptyset$.
+    \item $\delta_{int}(\sigma) = \text{Exponencial}(1 / 8.0)$.
+    \item $\lambda(\sigma) = (confirmacionEnfermero, out\_conf)$.
+    \item $ta(\sigma) = \sigma$.
+\end{itemize}
+
+\section{Especificación del Modelo Acoplado Global}
+A continuación se detalla la infraestructura de interconexiones que da forma al sistema de lazo cerrado:
+
+\begin{itemize}
+    \item \textbf{Generador de Fin Bolsa} $\rightarrow$ Envía la señal \texttt{finBolsa} al \textbf{Controlador de Bomba}.
+    \item \textbf{Generador de Confirmación ($G_{ce}$)} $\rightarrow$ Conecta \texttt{out\_conf} al \textbf{Controlador de Bomba}.
+    \item \textbf{Generador de Órdenes ($G_{om}$)} $\rightarrow$ Conecta \texttt{out\_caudal\_obj} al \textbf{Controlador de Bomba}.
+    \item \textbf{Controlador de Bomba} $\rightarrow$ Envía la consigna por su puerto hacia \texttt{in\_caudal\_obj} del \textbf{Actuador de la Bomba}, y \texttt{detenerBomba} hacia \texttt{in\_stop}. Despacha las alertas al \textbf{Módulo de Alarmas}.
+    \item \textbf{Actuador de la Bomba ($A$)} $\rightarrow$ Comunica el \texttt{caudalReal} a través de \texttt{out\_caudal\_real} hacia \texttt{in\_caudal\_real} del \textbf{Sensor de Flujo}.
+    \item \textbf{Sensor de Flujo ($G_{sf}$)} $\rightarrow$ Envía el \texttt{caudalMedido} (con ruido) desde \texttt{out\_caudal\_medido} hacia el \textbf{Controlador de Bomba}.
+\end{itemize}
+
+\section{Esqueletos para Etapas Posteriores (Trabajo Futuro)}
+
+\subsection{Generador de Fin de Bolsa}
+\textit{La especificación formal y el comportamiento estocástico de este componente se desarrollarán en la siguiente etapa del proyecto.}
+
+\subsection{Controlador de Bomba}
+\textit{La especificación formal del núcleo de control lógico y de toma de decisiones del sistema se incorporará en las próximas entregas.}
+
+\subsection{Módulo de Alarmas}
+\textit{El procesamiento de prioridades de alertas y su temporización se definirá en las etapas avanzadas del diseño de simulación.}
