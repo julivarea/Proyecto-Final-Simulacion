@@ -12,5 +12,5 @@
 \contentsline {subsection}{\numberline {3.2.4}Generador de Confirmaciones del Enfermero ($G_{ce}$)}{6}{}%
 \contentsline {subsection}{\numberline {3.2.5}Generador de Fin de Bolsa ($G_{fb}$)}{7}{}%
 \contentsline {subsection}{\numberline {3.2.6}Módulo de Alarmas ($M_a$)}{8}{}%
-\contentsline {subsection}{\numberline {3.2.7}Controlador de Bomba ($C$)}{8}{}%
-\contentsline {section}{\numberline {3.3}Especificación del Modelo Acoplado Global}{8}{}%
+\contentsline {subsection}{\numberline {3.2.7}Controlador de Bomba ($C$)}{9}{}%
+\contentsline {section}{\numberline {3.3}Especificación del Modelo Acoplado Global}{9}{}%

@@ -175,7 +175,89 @@ donde:
 \end{itemize}
 
 \subsection{Módulo de Alarmas ($M_a$)}
-\textit{La especificación formal del procesamiento de prioridades de alertas y su temporización se desarrollará en la siguiente etapa del proyecto.}
+Este componente gestiona la presentación de alarmas al personal de enfermería. Recibe las señales de alarma del Controlador, las notifica al entorno y, en el caso de alarmas críticas, implementa un ciclo de re-notificación hasta recibir confirmación.
+Se establece un orden de prioridad (BAJA $<$ MEDIA $<$ CRITICA) de modo que una alarma de menor prioridad no pueda interrumpir el procesamiento de una alarma de mayor prioridad que esté activa.
+
+Matemáticamente, el modelo se define como:
+\[ M_a = \langle X_{M_a}, Y_{M_a}, S_{M_a}, \delta_{int}, \delta_{ext}, \lambda, ta \rangle \]
+donde:
+\begin{itemize}
+    \item Puertos de entrada:
+    \begin{gather*}
+    X_{M_a} = (\{\top\} \times \{in\_alarma\_baja\})
+           \cup (\{\top\} \times \{in\_alarma\_media\}) \\
+           \cup\; (\{\top\} \times \{in\_alarma\_critica\})
+           \cup (\{\top\} \times \{in\_conf\})
+    \end{gather*}
+    \item $Y_{M_a} = \{\text{BAJA}, \text{MEDIA}, \text{CRITICA}\} \times \{out\_alarma\}$
+    \item Estado:
+    \begin{gather*}
+    S_{M_a} = \{\text{OCIOSO}, \text{NOTIFICAR}, \text{ESPERANDO\_CONF}, \text{REPETIR}\} \\
+           \times\; \{\text{NINGUNA}, \text{BAJA}, \text{MEDIA}, \text{CRITICA}\}
+           \times \mathbb{R}_{\geq 0} \cup \{\infty\}
+    \end{gather*}
+           donde $s = (fase, a, \sigma)$.
+
+    Las variables del estado representan:
+    \begin{itemize}
+        \item $fase$: fase actual del módulo.
+        \item $a$: tipo de alarma activa que se está gestionando.
+        \item $\sigma$: tiempo hasta la próxima transición interna.
+    \end{itemize}
+
+    \item Sea $prio$ la función de prioridad: $prio(\text{NINGUNA}) = 0$, $prio(\text{BAJA}) = 1$, $prio(\text{MEDIA}) = 2$, $prio(\text{CRITICA}) = 3$.
+
+    \item $s_0 = (\text{OCIOSO},\; \text{NINGUNA},\; \infty)$.
+
+    \item Transición Externa. Sea $a'$ el tipo de alarma asociado al puerto
+    ($in\_alarma\_baja \to \text{BAJA}$, $in\_alarma\_media \to \text{MEDIA}$,
+    $in\_alarma\_critica \to \text{CRITICA}$):
+    \[
+    \delta_{ext}((fase, a, \sigma), e, (Xv, port)) =
+    \]
+    \[
+    \begin{cases}
+    (\text{NOTIFICAR},\; a',\; 0) \\
+    \quad \text{si } port \neq in\_conf \land
+          (fase = \text{OCIOSO} \lor prio(a') > prio(a)) \\[2ex]
+    (fase,\; a,\; \sigma - e) \\
+    \quad \text{si } port \neq in\_conf \land
+          fase \neq \text{OCIOSO} \land prio(a') \leq prio(a) \\[2ex]
+    (\text{OCIOSO},\; \text{NINGUNA},\; \infty) \\
+    \quad \text{si } port = in\_conf \land a = \text{CRITICA} \\[2ex]
+    (fase,\; a,\; \sigma - e) \\
+    \quad \text{si } port = in\_conf \land a \neq \text{CRITICA}
+    \end{cases}
+    \]
+
+    \item Transición Interna:
+    \[
+    \delta_{int}(fase, a, \sigma) =
+    \]
+    \[
+    \begin{cases}
+    (\text{OCIOSO},\; \text{NINGUNA},\; \infty) \\
+    \quad \text{si } fase = \text{NOTIFICAR} \land a \neq \text{CRITICA} \\[2ex]
+    (\text{ESPERANDO\_CONF},\; \text{CRITICA},\; 30) \\
+    \quad \text{si } fase = \text{NOTIFICAR} \land a = \text{CRITICA} \\[2ex]
+    (\text{REPETIR},\; \text{CRITICA},\; 0) \\
+    \quad \text{si } fase = \text{ESPERANDO\_CONF} \\[2ex]
+    (\text{REPETIR},\; \text{CRITICA},\; 10) \\
+    \quad \text{si } fase = \text{REPETIR}
+    \end{cases}
+    \]
+
+    \item Función de salida:
+    \[
+    \lambda(fase, a, \sigma) =
+    \begin{cases}
+    (a,\; out\_alarma) & \text{si } fase = \text{NOTIFICAR} \lor fase = \text{REPETIR} \\
+    \emptyset & \text{en otro caso}
+    \end{cases}
+    \]
+
+    \item $ta(fase, a, \sigma) = \sigma$.
+\end{itemize}
 
 \subsection{Controlador de Bomba ($C$)}
 \textit{La especificación formal del núcleo de control lógico y de toma de decisiones del sistema se incorporará en la siguiente etapa del proyecto.}

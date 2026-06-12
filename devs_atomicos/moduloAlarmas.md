@@ -10,14 +10,23 @@ S = {"OCIOSO", "NOTIFICAR ALARMA", "ESPERANDO CONFIRMACION", "REPETIR ALARMA"}
   × ℝ⁺∪{∞}
   [fase, alarmaActiva, σ]
 
+// Variables del estado:
+//   fase:         fase actual del módulo
+//   alarmaActiva: tipo de alarma que se está gestionando
+//   σ:            tiempo hasta la próxima transición interna
+
+// Función auxiliar de prioridad:
+//   prio(a): NINGUNA → 0, BAJA → 1, MEDIA → 2, CRITICA → 3
+
+s₀ = ("OCIOSO", "NINGUNA", ∞)
+
 ta(fase, alarmaActiva, σ) = σ
 
 δext((fase, alarmaActiva, σ), e, (event, port)) =
     switch (port) {
-        // Cada puerto corresponde a un único tipo de alarma; no es necesario leer event
-        case 0: ("NOTIFICAR ALARMA", "BAJA",    0)
-        case 1: ("NOTIFICAR ALARMA", "MEDIA",   0)
-        case 2: ("NOTIFICAR ALARMA", "CRITICA", 0)
+        case 0: nuevaAlarma = "BAJA"
+        case 1: nuevaAlarma = "MEDIA"
+        case 2: nuevaAlarma = "CRITICA"
         case 3:
             // Confirmación del enfermero
             if (alarmaActiva == "CRITICA") {
@@ -26,6 +35,17 @@ ta(fase, alarmaActiva, σ) = σ
             else {
                 (fase, alarmaActiva, σ - e)     // no hay alarma crítica activa; ignorar
             }
+    }
+
+    // Para ports 0, 1, 2: aplicar guarda de prioridad
+    if (port != 3) {
+        if (fase == "OCIOSO" || prio(nuevaAlarma) > prio(alarmaActiva)) {
+            ("NOTIFICAR ALARMA", nuevaAlarma, 0)
+        }
+        else {
+            // Alarma de menor o igual prioridad mientras hay una activa: ignorar
+            (fase, alarmaActiva, σ - e)
+        }
     }
 
 δint(fase, alarmaActiva, σ) =
