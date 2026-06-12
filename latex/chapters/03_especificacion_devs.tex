@@ -103,25 +103,99 @@ donde:
     \item $ta(\sigma) = \sigma$.
 \end{itemize}
 
+\subsection{Generador de Fin de Bolsa ($G_{fb}$)}
+Este componente modela la bolsa de infusión. Rastrea el volumen restante de líquido
+en base al caudal medido por el Sensor de Flujo y emite una señal de alerta cuando
+estima que quedan 60 segundos o menos para agotar la bolsa.
+Se asume una capacidad de bolsa $V_0 = 500$ ml y un umbral de alerta $T_a = 60$ s.
+
+Matemáticamente, el modelo se define como:
+\[ G_{fb} = \langle X_{G_{fb}}, Y_{G_{fb}}, S_{G_{fb}}, \delta_{int}, \delta_{ext}, \lambda, ta \rangle \]
+donde:
+\begin{itemize}
+    \item $X_{G_{fb}} = ([0, 200] \times \{in\_caudal\_medido\}) \cup (\{\top\} \times \{in\_rellenar\})$
+    \item $Y_{G_{fb}} = \{\top\} \times \{out\_fin\_bolsa\}$
+    \item $S_{G_{fb}} = \{\text{MONITOREANDO}, \text{ESPERANDO\_RELLENO}\}
+           \times \mathbb{R}_{\geq 0}
+           \times [0, 200]
+           \times \mathbb{R}_{\geq 0} \cup \{\infty\}$,
+           donde $s = (fase, volRest, q, \sigma)$.
+
+    Las variables del estado representan:
+    \begin{itemize}
+        \item $fase$: fase actual del componente.
+        \item $volRest$: volumen restante de líquido en la bolsa (ml).
+        \item $q$: último caudal medido informado por el Sensor de Flujo (ml/h).
+        \item $\sigma$: tiempo hasta la próxima transición interna.
+    \end{itemize}
+
+    \item $s_0 = (\text{MONITOREANDO},\; V_0,\; 0.0,\; \infty)$.
+
+    \item Funciones auxiliares. $vol'$ descuenta el volumen consumido durante $e$ segundos al caudal $q$, y $\hat{\sigma}$ calcula cuánto falta para emitir la alerta dado un volumen y un caudal:
+    \[
+    vol'(volRest, q, e) = \max\!\left(volRest - q \cdot \frac{e}{3600},\; 0\right)
+    \]
+    \[
+    \hat{\sigma}(v, q) =
+    \begin{cases}
+    \infty & \text{si } q = 0 \\
+    0 & \text{si } \dfrac{v}{q / 3600} \leq T_a \\[1ex]
+    \dfrac{v}{q / 3600} - T_a & \text{en otro caso}
+    \end{cases}
+    \]
+
+    \item Transición Externa. Sea $v' = vol'(volRest, q, e)$:
+    \[
+    \delta_{ext}((fase, volRest, q, \sigma), e, (Xv, port)) =
+    \]
+    \[
+    \begin{cases}
+    (\text{ESPERANDO\_RELLENO},\; v',\; Xv,\; \infty) \\
+    \quad \text{si } port = in\_caudal\_medido \land fase = \text{ESPERANDO\_RELLENO} \\[2ex]
+    (\text{MONITOREANDO},\; v',\; Xv,\; \hat{\sigma}(v', Xv)) \\
+    \quad \text{si } port = in\_caudal\_medido \land fase = \text{MONITOREANDO} \\[2ex]
+    (\text{MONITOREANDO},\; V_0,\; q,\; \hat{\sigma}(V_0, q)) \\
+    \quad \text{si } port = in\_rellenar
+    \end{cases}
+    \]
+
+    \item $\delta_{int}(fase, volRest, q, \sigma)
+           = (\text{ESPERANDO\_RELLENO},\; volRest,\; q,\; \infty)$
+
+    \item Función de salida:
+    \[
+    \lambda(fase, volRest, q, \sigma) =
+    \begin{cases}
+    (\top,\; out\_fin\_bolsa) & \text{si } fase = \text{MONITOREANDO} \\
+    \emptyset & \text{en otro caso}
+    \end{cases}
+    \]
+
+    \item $ta(fase, volRest, q, \sigma) = \sigma$.
+\end{itemize}
+
+\subsection{Módulo de Alarmas ($M_a$)}
+\textit{La especificación formal del procesamiento de prioridades de alertas y su temporización se desarrollará en la siguiente etapa del proyecto.}
+
+\subsection{Controlador de Bomba ($C$)}
+\textit{La especificación formal del núcleo de control lógico y de toma de decisiones del sistema se incorporará en la siguiente etapa del proyecto.}
+
 \section{Especificación del Modelo Acoplado Global}
 A continuación se detalla la infraestructura de interconexiones que da forma al sistema de lazo cerrado:
 
+\begin{figure}[h]
+    \centering
+    % \includegraphics[width=\textwidth]{diagrama_acoplado.png}
+    \textit{[Diagrama del modelo acoplado pendiente de inclusión.]}
+    \caption{Diagrama del modelo acoplado global del sistema de infusión.}
+    \label{fig:diagrama_acoplado}
+\end{figure}
+
 \begin{itemize}
-    \item \textbf{Generador de Fin Bolsa} $\rightarrow$ Envía la señal \texttt{finBolsa} al \textbf{Controlador de Bomba}.
+    \item \textbf{Generador de Fin Bolsa ($G_{fb}$)} $\rightarrow$ Envía la señal \texttt{finBolsa} al \textbf{Controlador de Bomba}.
     \item \textbf{Generador de Confirmación ($G_{ce}$)} $\rightarrow$ Conecta \texttt{out\_conf} al \textbf{Controlador de Bomba}.
     \item \textbf{Generador de Órdenes ($G_{om}$)} $\rightarrow$ Conecta \texttt{out\_caudal\_obj} al \textbf{Controlador de Bomba}.
     \item \textbf{Controlador de Bomba} $\rightarrow$ Envía la consigna por su puerto hacia \texttt{in\_caudal\_obj} del \textbf{Actuador de la Bomba}, y \texttt{detenerBomba} hacia \texttt{in\_stop}. Despacha las alertas al \textbf{Módulo de Alarmas}.
     \item \textbf{Actuador de la Bomba ($A$)} $\rightarrow$ Comunica el \texttt{caudalReal} a través de \texttt{out\_caudal\_real} hacia \texttt{in\_caudal\_real} del \textbf{Sensor de Flujo}.
-    \item \textbf{Sensor de Flujo ($G_{sf}$)} $\rightarrow$ Envía el \texttt{caudalMedido} (con ruido) desde \texttt{out\_caudal\_medido} hacia el \textbf{Controlador de Bomba}.
+    \item \textbf{Sensor de Flujo ($G_{sf}$)} $\rightarrow$ Envía el \texttt{caudalMedido} (con ruido) desde \texttt{out\_caudal\_medido} hacia el \textbf{Controlador de Bomba} y el \textbf{Generador de Fin de Bolsa ($G_{fb}$)}.
 \end{itemize}
-
-\section{Esqueletos para Etapas Posteriores (Trabajo Futuro)}
-
-\subsection{Generador de Fin de Bolsa}
-\textit{La especificación formal y el comportamiento estocástico de este componente se desarrollarán en la siguiente etapa del proyecto.}
-
-\subsection{Controlador de Bomba}
-\textit{La especificación formal del núcleo de control lógico y de toma de decisiones del sistema se incorporará en las próximas entregas.}
-
-\subsection{Módulo de Alarmas}
-\textit{El procesamiento de prioridades de alertas y su temporización se definirá en las etapas avanzadas del diseño de simulación.}

@@ -4,10 +4,10 @@ X = {caudalMedido:  [0, 200]}   x {In 0}   // del Sensor de Flujo
 Y = {finBolsa: {⊤}}            x {Out 0}  // → al Controlador de Bomba
 
 S = {"MONITOREANDO", "ESPERANDO RELLENO"}
-  × ℝ⁺∪{0}           // volumenRestante (ml)
-  × [0, 200]          // ultimoCaudal (ml/h)
-  × ℝ⁺∪{∞}           // σ
-  [fase, volumenRestante, ultimoCaudal, σ]
+  × ℝ⁺∪{0}           // volRest: volumen restante de líquido en la bolsa (ml)
+  × [0, 200]          // q: último caudal medido informado por el sensor (ml/h)
+  × ℝ⁺∪{∞}           // σ: tiempo hasta la próxima transición interna
+  [fase, volRest, q, σ]
 
 // Constantes:
 //   VOL_INICIAL    = 500.0 ml  (capacidad de la bolsa, parametrizable)
@@ -15,39 +15,38 @@ S = {"MONITOREANDO", "ESPERANDO RELLENO"}
 
 s₀ = ("MONITOREANDO", VOL_INICIAL, 0.0, ∞)
 
-ta(fase, volumenRestante, ultimoCaudal, σ) = σ
+ta(fase, volRest, q, σ) = σ
 
 // Funciones auxiliares:
-//   descuento(vol, caudal, e) = max(vol - caudal * (e / 3600), 0)
-//   calcularSigma(vol, caudal) =
-//       si caudal == 0 → ∞
-//       si vol / (caudal / 3600) ≤ UMBRAL_ALERTA → 0
-//       sino → vol / (caudal / 3600) - UMBRAL_ALERTA
+//   vol'(volRest, q, e): descuenta el volumen consumido durante 'e' segundos al caudal q
+//       = max(volRest - q * (e / 3600), 0)
+//
+//   σ̂(v, q): calcula cuánto falta para emitir la alerta dado un volumen y un caudal
+//       si q == 0 → ∞
+//       si v / (q / 3600) ≤ UMBRAL_ALERTA → 0
+//       sino → v / (q / 3600) - UMBRAL_ALERTA
 
-δext((fase, volumenRestante, ultimoCaudal, σ), e, (event, port)) =
-    volActual = descuento(volumenRestante, ultimoCaudal, e)
+δext((fase, volRest, q, σ), e, (Xv, port)) =
+    v' = vol'(volRest, q, e)
 
     switch (port) {
         case 0:  // caudalMedido del Sensor de Flujo
             if (fase == "ESPERANDO RELLENO") {
-                // Ya emitimos finBolsa; solo actualizamos caudal, σ queda ∞
-                ("ESPERANDO RELLENO", volActual, event, ∞)
+                ("ESPERANDO RELLENO", v', Xv, ∞)
             }
             else {
-                // fase == "MONITOREANDO"
-                ("MONITOREANDO", volActual, event, calcularSigma(volActual, event))
+                ("MONITOREANDO", v', Xv, σ̂(v', Xv))
             }
 
         case 1:  // rellenarBolsa
-            ("MONITOREANDO", VOL_INICIAL, ultimoCaudal,
-             calcularSigma(VOL_INICIAL, ultimoCaudal))
+            ("MONITOREANDO", VOL_INICIAL, q, σ̂(VOL_INICIAL, q))
     }
 
-δint(fase, volumenRestante, ultimoCaudal, σ) =
+δint(fase, volRest, q, σ) =
     // λ acaba de emitir finBolsa. Pasamos a esperar el relleno.
-    ("ESPERANDO RELLENO", volumenRestante, ultimoCaudal, ∞)
+    ("ESPERANDO RELLENO", volRest, q, ∞)
 
-λ(fase, volumenRestante, ultimoCaudal, σ) =
+λ(fase, volRest, q, σ) =
     if (fase == "MONITOREANDO") {
         (⊤, Out 0)     // finBolsa
     }
