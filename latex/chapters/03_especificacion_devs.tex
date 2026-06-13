@@ -514,22 +514,70 @@ donde:
 
 \end{itemize}
 
+\subsection{Registrador de Eventos ($R_e$)}
+Este componente pasivo tiene la única responsabilidad de recibir y almacenar el historial de las decisiones tomadas por el Controlador de Bomba, formando una traza de auditoría para su posterior análisis. 
+
+Matemáticamente, el modelo se define como:
+\[ R_e = \langle X_{R_e}, Y_{R_e}, S_{R_e}, \delta_{int}, \delta_{ext}, \lambda, ta \rangle \]
+donde:
+\begin{itemize}
+    \item $X_{R_e} = \mathcal{E} \times \{in\_registrar\}$, siendo $\mathcal{E}$ el conjunto de tokens definidos en el Controlador.
+    \item $Y_{R_e} = \emptyset$ (No posee puertos de salida, ya que es un componente sumidero).
+    \item $S_{R_e} = \mathcal{E}^* \times (\mathbb{R}_{\geq 0} \cup \{\infty\})$, donde $s = (historial, \sigma)$.
+    Las variables del estado representan:
+    \begin{itemize}
+        \item $historial$: Secuencia o lista finita de tokens ($\mathcal{E}^*$) que acumula todos los eventos recibidos desde el inicio de la simulación.
+        \item $\sigma$: Tiempo hasta la próxima transición interna.
+    \end{itemize}
+    
+    \item $s_0 = ([ ],\; \infty)$. El historial comienza vacío y el componente en reposo.
+
+    \item Transición Externa. Simplemente concatena el evento entrante al final del historial y permanece en reposo infinito:
+    \[
+    \delta_{ext}((historial, \sigma), e, (Xv, port)) = (historial \mathbin{++} [Xv],\; \infty)
+    \]
+    \quad \textit{Nota:} Se asume que $port = in\_registrar$.
+
+    \item $\delta_{int}(historial, \sigma) = (historial, \infty)$. (Esta función no se ejecutará en la práctica, dado que $\sigma$ siempre es $\infty$).
+    
+    \item $\lambda(historial, \sigma) = \emptyset$.
+    
+    \item $ta(historial, \sigma) = \sigma$.
+\end{itemize}
+
 \section{Especificación del Modelo Acoplado Global}
-A continuación se detalla la infraestructura de interconexiones que da forma al sistema de lazo cerrado:
+El modelo acoplado global ($N$) integra todos los modelos atómicos previamente definidos para conformar el sistema de lazo cerrado completo. A continuación, se detallan las conexiones internas (IC), las entradas desde el entorno (EIC) y las salidas hacia el exterior (EOC) del sistema.
+
+\subsection{Conexiones del Sistema}
+\begin{itemize}
+    \item \textbf{Generador de Órdenes ($G_{om}$):} Conecta su salida \texttt{out\_caudal\_obj} a la entrada \texttt{in\_orden\_medica} del \textbf{Controlador de Bomba ($C$)}.
+    \item \textbf{Generador de Confirmación ($G_{ce}$):} Su salida \texttt{out\_conf} se divide y conecta simultáneamente a dos componentes: al puerto \texttt{in\_conf\_enfermero} del \textbf{Controlador ($C$)} y al puerto \texttt{in\_conf} del \textbf{Módulo de Alarmas ($M_a$)}.
+    \item \textbf{Generador de Fin Bolsa ($G_{fb}$):} Conecta su salida \texttt{out\_fin\_bolsa} a la entrada \texttt{in\_fin\_bolsa} del \textbf{Controlador ($C$)}.
+    \item \textbf{Controlador de Bomba ($C$):}
+    \begin{itemize}
+        \item Envía la señal \texttt{out\_ajustar\_caudal} hacia \texttt{in\_caudal\_obj} del \textbf{Actuador ($A$)}.
+        \item Envía la señal \texttt{out\_detener\_bomba} hacia \texttt{in\_stop} del \textbf{Actuador ($A$)}.
+        \item Despacha las alertas \texttt{out\_alarma\_baja}, \texttt{out\_alarma\_media} y \texttt{out\_alarma\_critica} hacia los puertos homónimos del \textbf{Módulo de Alarmas ($M_a$)}.
+        \item Emite los tokens de auditoría desde \texttt{out\_registrar\_evento} hacia el puerto \texttt{in\_registrar} del \textbf{Registrador de Eventos ($R_e$)}.
+    \end{itemize}
+    \item \textbf{Actuador de la Bomba ($A$):} Comunica el caudal físico a través de \texttt{out\_caudal\_real} hacia el puerto \texttt{in\_caudal\_real} del \textbf{Sensor de Flujo ($G_{sf}$)}. Este puerto también opera como una salida global del sistema (EOC) para observar la respuesta real de la bomba desde el exterior.
+    \item \textbf{Sensor de Flujo ($G_{sf}$):} Retroalimenta el valor sensado desde \texttt{out\_caudal\_medido} hacia el puerto \texttt{in\_caudal\_medido} del \textbf{Controlador ($C$)} y simultáneamente hacia la entrada \texttt{in\_caudal\_medido} del \textbf{Generador de Fin de Bolsa ($G_{fb}$)}.
+    \item \textbf{Módulo de Alarmas ($M_a$):} Su puerto \texttt{out\_alarma} funciona como una salida global del sistema (EOC) para emitir notificaciones sonoras y visuales al entorno hospitalario.
+    \item \textbf{Entradas del Entorno (EIC):} El puerto \texttt{in\_rellenar} del \textbf{Generador de Fin de Bolsa ($G_{fb}$)} queda expuesto como una entrada externa del modelo acoplado para permitir que el entorno simule la reposición manual de líquido.
+\end{itemize}
+
+\subsection{Representación Gráfica}
+En la Figura \ref{fig:diagrama_acoplado} se presenta el diagrama de bloques del modelo acoplado, ilustrando la arquitectura de lazo cerrado, el flujo de señales entre los distintos componentes DEVS y la interacción con el entorno exterior.
 
 \begin{figure}[h]
     \centering
-    % \includegraphics[width=\textwidth]{diagrama_acoplado.png}
-    \textit{[Diagrama del modelo acoplado pendiente de inclusión.]}
-    \caption{Diagrama del modelo acoplado global del sistema de infusión.}
+    % Para incluir tu imagen final, simplemente quita el "%" de la línea de abajo y asegúrate de que el nombre del archivo coincida con el tuyo.
+    % \includegraphics[width=0.9\textwidth]{diagrama_acoplado.png}
+    
+    \vspace{2.5cm} % Este espacio mantiene la estructura del PDF mientras haces el dibujo
+    \textit{[Espacio reservado para el diagrama gráfico del modelo acoplado]}
+    \vspace{2.5cm}
+    
+    \caption{Diagrama de red del modelo acoplado global del sistema de infusión intravenosa.}
     \label{fig:diagrama_acoplado}
 \end{figure}
-
-\begin{itemize}
-    \item \textbf{Generador de Fin Bolsa ($G_{fb}$)} $\rightarrow$ Envía la señal \texttt{finBolsa} al \textbf{Controlador de Bomba}.
-    \item \textbf{Generador de Confirmación ($G_{ce}$)} $\rightarrow$ Conecta \texttt{out\_conf} al \textbf{Controlador de Bomba}.
-    \item \textbf{Generador de Órdenes ($G_{om}$)} $\rightarrow$ Conecta \texttt{out\_caudal\_obj} al \textbf{Controlador de Bomba}.
-    \item \textbf{Controlador de Bomba} $\rightarrow$ Envía la consigna por su puerto hacia \texttt{in\_caudal\_obj} del \textbf{Actuador de la Bomba}, y \texttt{detenerBomba} hacia \texttt{in\_stop}. Despacha las alertas al \textbf{Módulo de Alarmas}.
-    \item \textbf{Actuador de la Bomba ($A$)} $\rightarrow$ Comunica el \texttt{caudalReal} a través de \texttt{out\_caudal\_real} hacia \texttt{in\_caudal\_real} del \textbf{Sensor de Flujo}.
-    \item \textbf{Sensor de Flujo ($G_{sf}$)} $\rightarrow$ Envía el \texttt{caudalMedido} (con ruido) desde \texttt{out\_caudal\_medido} hacia el \textbf{Controlador de Bomba} y el \textbf{Generador de Fin de Bolsa ($G_{fb}$)}.
-\end{itemize}
