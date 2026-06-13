@@ -260,7 +260,138 @@ donde:
 \end{itemize}
 
 \subsection{Controlador de Bomba ($C$)}
-\textit{La especificación formal del núcleo de control lógico y de toma de decisiones del sistema se incorporará en la siguiente etapa del proyecto.}
+Este componente constituye el núcleo lógico de toma de decisiones del sistema de lazo cerrado. Es el encargado de recibir de forma asíncrona las prescripciones médicas, las lecturas del sensor de flujo, las alertas físicas de agotamiento de la bolsa y las confirmaciones del personal de enfermería. Su función es evaluar de manera simultánea e independiente las desviaciones de caudal y los plazos de seguridad de la bolsa para coordinar las acciones físicas del actuador y la activación jerárquica de alarmas. 
+
+Para resolver la concurrencia de múltiples salidas simultáneas hacia el actuador, el módulo de alarmas y el registro de eventos histórico, el componente utiliza una estructura interna de buffer estructurada como una secuencia de eventos. El vaciado secuencial de este buffer se realiza en un tiempo físico nulo ($\sigma = 0$) mediante estados transitorios dedicados.
+
+Matemáticamente, el modelo se define como:
+\[ C = \langle X_C, Y_C, S_C, \delta_{int}, \delta_{ext}, \lambda, ta \rangle \]
+donde:
+\begin{itemize}
+\item Puertos de entrada:
+    \begin{gather*}
+    X_C = ([0, 200] \times \{in\_orden\_medica\}) \cup ([0, 200] \times \{in\_caudal\_medido\}) \\
+    \cup\; (\{\top\} \times \{in\_fin\_bolsa\}) \cup (\{\top\} \times \{in\_conf\_enfermero\})
+    \end{gather*}
+
+    \item Puertos de salida:
+\begin{gather*}
+    Y_C = ([0, 200] \times \{out\_ajustar\_caudal\}) \cup (\{\top\} \times \{out\_detener\_bomba\}) \\
+    \cup\; (\{\top\} \times \{out\_alarma\_baja\}) \cup (\{\top\} \times \{out\_alarma\_media\}) \\
+    \cup\; (\{\top\} \times \{out\_alarma\_critica\}) \cup (\mathcal{E} \times \{out\_registrar\_evento\})
+    \end{gather*}
+    Donde el conjunto finito $\mathcal{E}$ define los tokens legibles destinados al modelo atómico de registro e historial del sistema:
+\begin{gather*}
+    \mathcal{E} = \{\text{NUEVA\_ORDEN}, \text{AJUSTE\_CAUDAL}, \text{DETENCION\_MEDICA}, \text{ALARMA\_BAJA}, \\
+    \text{ALARMA\_MEDIA}, \text{ALARMA\_CRITICA}, \text{FIN\_BOLSA\_DETECTADO}, \\
+    \text{CONFIRMACION\_ENFERMERO}\}
+    \end{gather*}
+
+    \item Estado:
+    \[ S_C = \text{Fases} \times [0, 200] \times \mathbb{R}_{\geq 0} \times \mathbb{R}_{\geq 0} \times \text{EstadoBolsa} \times Y_C^* \times (\mathbb{R}_{\geq 0} \cup \{\infty\}) \]
+    donde $s = (fase, caudal\_obj, seg\_desvio, seg\_fin\_bolsa, estado\_bolsa, cola\_salidas, \sigma)$.
+
+    Las variables del estado representan:
+    \begin{itemize}
+        \item $fase$: Fase operativa del controlador, donde:
+        \[ \text{Fases} = \{\text{NORMAL}, \text{BLOQUEADO\_CRITICO}, \text{PROC\_NORMAL}, \text{PROC\_BLOQUEADO}\} \]
+        Las fases que inician con el prefijo \texttt{PROC} modelan estados inmediatos efímeros destinados a vaciar los mensajes acumulados en la cola de salidas.
+        \item $caudal\_obj$: Último caudal de infusión válido prescrito por la orden médica ($ml/h$).
+        \item $seg\_desvio$: Tiempo físico continuo acumulado ($s$) en el cual la lectura real informada por el sensor difiere en más de un 10\% respecto al valor objetivo.
+        \item $seg\_fin\_bolsa$: Tiempo físico transcurrido ($s$) desde el instante en que el módulo de la bolsa notificó la condición preventiva de agotamiento de fluidos.
+        \item $estado\_bolsa$: Estado físico de la reserva de fluidos, donde:
+        \[ \text{EstadoBolsa} = \{\text{CON\_LIQUIDO}, \text{POR\_AGOTARSE}\} \]
+        \item $cola\_salidas$: Secuencia o lista finita de pares ordenados ($Y_C^*$) que opera como un buffer FIFO (\textit{First-In, First-Out}) de acciones pendientes de ser transmitidas al entorno.
+        \item $\sigma$: Tiempo remanente planificado hasta la ejecución del próximo evento interno automático.
+    \end{itemize}
+
+    \item $s_0 = (\text{NORMAL},\; 0.0,\; 0.0,\; 0.0,\; \text{CON\_LIQUIDO},\; [ ],\; \infty)$.
+
+    \item Funciones auxiliares y variables de soporte. Denotamos $\text{head}(Q)$ como la función que extrae el primer elemento de una secuencia $Q$, $\text{tail}(Q)$ como la secuencia resultante tras remover su primer par mapeado, y el operador $\mathbin{++}$ como la concatenación de listas ordenadas. Para garantizar un comportamiento determinista y evitar el solapamiento de condiciones lógicas planas al ingresar datos por el puerto del sensor, se definen las siguientes variables matemáticas de actualización temporal previa:
+    \[
+    D = (caudal\_obj > 0) \land (|Xv - caudal\_obj| > 0.1 \cdot caudal\_obj)
+    \]
+    \[
+    sd' = \begin{cases} seg\_desvio + 1.0 & \text{si } D \\ 0.0 & \text{en otro caso} \end{cases}
+    \]
+    \[
+    sb' = \begin{cases} seg\_fin\_bolsa + 1.0 & \text{si } estado\_bolsa = \text{POR\_AGOTARSE} \\ seg\_fin\_bolsa & \text{en otro caso} \end{cases}
+    \]
+    Haciendo uso de estas variables temporales, se estructuran las sub-secuencias finitas de salidas inmediatas independientes:
+    \[
+    Q_{desvio} = \begin{cases} 
+    [(\top, out\_alarma\_media), (\text{ALARMA\_MEDIA}, out\_registrar\_evento)] & \text{si } sd' = 5.0 \\ 
+    \begin{aligned}
+    &[(\top, out\_alarma\_critica), (\top, out\_detener\_bomba), \\
+    &\; (\text{ALARMA\_CRITICA}, out\_registrar\_evento)]
+    \end{aligned} & \text{si } sd' = 10.0 \\ 
+    [ ] & \text{en otro caso} 
+    \end{cases}
+    \]
+
+    \[
+    Q_{bolsa} = \begin{cases} [(\top, out\_detener\_bomba), (\text{DETENCION\_MEDICA}, out\_registrar\_evento)] & \text{si } sb' = 60.0 \\ [ ] & \text{en otro caso} \end{cases}
+    \]
+    La cola agregada unificada resultante se expresa mediante la concatenación directa de ambos buffers de falla:
+    \[ Q_{nuevas} = Q_{desvio} \mathbin{++} Q_{bolsa} \]
+
+    \item Transición Interna. Descarta secuencialmente los elementos ya procesados por la función de salida. Si el buffer se vacía, evalúa la fase de origen para retornar al estado de reposo correspondiente:
+\[
+    \delta_{int}(fase, caudal\_obj, seg\_desvio, seg\_fin\_bolsa, estado\_bolsa, cola\_salidas, \sigma) =
+    \]
+    \[
+    \begin{cases}
+    (fase,\; caudal\_obj,\; seg\_desvio,\; seg\_fin\_bolsa,\; estado\_bolsa,\; \text{tail}(cola\_salidas),\; 0) \\
+    \quad \text{si } \text{tail}(cola\_salidas) \neq [ ] \\[2ex]
+    (\text{NORMAL},\; caudal\_obj,\; seg\_desvio,\; seg\_fin\_bolsa,\; estado\_bolsa,\; [ ],\; \infty) \\
+    \quad \text{si } \text{tail}(cola\_salidas) = [ ] \land fase = \text{PROC\_NORMAL} \\[2ex]
+    (\text{BLOQUEADO\_CRITICO},\; caudal\_obj,\; seg\_desvio,\; seg\_fin\_bolsa,\; estado\_bolsa,\; [ ],\; \infty) \\
+    \quad \text{si } \text{tail}(cola\_salidas) = [ ] \land fase = \text{PROC\_BLOQUEADO}
+    \end{cases}
+    \]
+      
+    \item Transición Externa. Evalúa los estímulos externos de los cuatro puertos de entrada. Utiliza las variables y colas auxiliares previamente definidas para resolver de forma unificada e inequívoca las lecturas periódicas del sensor de flujo:
+    \[
+    \delta_{ext}((fase, caudal\_obj, seg\_desvio, seg\_fin\_bolsa, estado\_bolsa, cola\_salidas, \sigma), e, (Xv, port)) =
+    \]
+    \[
+    \begin{cases}
+    (\text{PROC\_NORMAL},\; Xv,\; 0.0,\; seg\_fin\_bolsa,\; estado\_bolsa,\; \\
+    \quad cola\_salidas \mathbin{++} [(\top, out\_detener\_bomba), (\text{DETENCION\_MEDICA}, out\_registrar\_evento)],\; 0) \\
+    \quad \text{si } port = in\_orden\_medica \land Xv = 0 \\[2ex]
+    (\text{PROC\_NORMAL},\; Xv,\; 0.0,\; seg\_fin\_bolsa,\; estado\_bolsa,\; \\
+    \quad cola\_salidas \mathbin{++} [(Xv, out\_ajustar\_caudal), (\text{NUEVA\_ORDEN}, out\_registrar\_evento)],\; 0) \\
+    \quad \text{si } port = in\_orden\_medica \land Xv > 0 \\[2ex]
+    (\text{PROC\_BLOQUEADO},\; 0.0,\; sd',\; sb',\; estado\_bolsa,\; cola\_salidas \mathbin{++} Q_{nuevas},\; 0) \\
+    \quad \text{si } port = in\_caudal\_medido \land fase \neq \text{BLOQUEADO\_CRITICO} \land sd' = 10.0 \\[2ex]
+    (\text{PROC\_NORMAL},\; 0.0,\; sd',\; sb',\; estado\_bolsa,\; cola\_salidas \mathbin{++} Q_{nuevas},\; 0) \\
+    \quad \text{si } port = in\_caudal\_medido \land fase \neq \text{BLOQUEADO\_CRITICO} \land sb' = 60.0 \land sd' \neq 10.0 \\[2ex]
+    (\text{PROC\_NORMAL},\; caudal\_obj,\; sd',\; sb',\; estado\_bolsa,\; cola\_salidas \mathbin{++} Q_{nuevas},\; 0) \\
+    \quad \text{si } port = in\_caudal\_medido \land fase \neq \text{BLOQUEADO\_CRITICO} \\
+    \quad \land\; Q_{nuevas} \neq [ ] \land sd' \neq 10.0 \land sb' \neq 60.0 \\[2ex]
+      (fase,\; caudal\_obj,\; sd',\; sb',\; estado\_bolsa,\; cola\_salidas,\; \sigma - e) \\
+    \quad \text{si } port = in\_caudal\_medido \land fase \neq \text{BLOQUEADO\_CRITICO} \land Q_{nuevas} = [ ] \\[2ex]
+    (fase,\; caudal\_obj,\; seg\_desvio,\; seg\_fin\_bolsa,\; estado\_bolsa,\; cola\_salidas,\; \sigma - e) \\
+    \quad \text{si } port = in\_caudal\_medido \land fase = \text{BLOQUEADO\_CRITICO} \\[2ex]
+    (\text{PROC\_NORMAL},\; caudal\_obj,\; seg\_desvio,\; 0.0,\; \text{POR\_AGOTARSE},\; \\
+    \quad cola\_salidas \mathbin{++} [(\top, out\_alarma\_baja), (\text{ALARMA\_BAJA}, out\_registrar\_evento), \\
+    \quad (\text{FIN\_BOLSA\_DETECTADO}, out\_registrar\_evento)],\; 0) \\
+    \quad \text{si } port = in\_fin\_bolsa \\[2ex]
+      (\text{PROC\_NORMAL},\; caudal\_obj,\; seg\_desvio,\; seg\_fin\_bolsa,\; estado\_bolsa,\; \\
+    \quad cola\_salidas \mathbin{++} [(caudal\_obj, out\_ajustar\_caudal), (\text{AJUSTE\_CAUDAL}, out\_registrar\_evento)],\; 0) \\
+    \quad \text{si } port = in\_conf\_enfermero \land fase = \text{BLOQUEADO\_CRITICO} \\[2ex]
+    (\text{PROC\_NORMAL},\; caudal\_obj,\; seg\_desvio,\; seg\_fin\_bolsa,\; estado\_bolsa,\; \\
+    \quad cola\_salidas \mathbin{++} [(\text{CONFIRMACION\_ENFERMERO}, out\_registrar\_evento)],\; 0) \\
+    \quad \text{si } port = in\_conf\_enfermero \land fase = \text{NORMAL}
+    \end{cases}
+    \]
+
+    \item Función de salida. Extrae de forma inmediata el par ordenado que encabeza la secuencia de salida activa:
+    \[ \lambda(fase, caudal\_obj, seg\_desvio, seg\_fin\_bolsa, estado\_bolsa, cola\_salidas, \sigma) = \text{head}(cola\_salidas) \]
+
+    \item Función de avance de tiempo:
+    \[ ta(fase, caudal\_obj, seg\_desvio, seg\_fin\_bolsa, estado\_bolsa, cola\_salidas, \sigma) = \sigma \]
+\end{itemize}
 
 \section{Especificación del Modelo Acoplado Global}
 A continuación se detalla la infraestructura de interconexiones que da forma al sistema de lazo cerrado:
