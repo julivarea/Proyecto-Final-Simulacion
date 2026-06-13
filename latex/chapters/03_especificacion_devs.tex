@@ -475,12 +475,12 @@ donde:
         \begin{itemize}
             \item $\delta_{ext}$: Entra al penúltimo caso ($port = in\_conf\_enfermero \land fase = \text{BLOQUEADO\_CRITICO}$). Pasa a $\text{PROC\_NORMAL}$ y encola el ajuste de caudal junto al registro. $\sigma = 0$.
             \item $\lambda$ / $\delta_{int}$: Vacía la cola. Vuelve a $\text{NORMAL}$ (desbloqueado).
-            \item \textbf{Detalle técnico elegante de su diseño:} Como en el caso 6 el $caudal\_obj$ fue pisado con $0.0$, al confirmarse la alarma el controlador envía al actuador la orden de ajustar a $0.0$. Así, el controlador se "desbloquea" lógicamente, pero la bomba no arranca físicamente hasta que un médico envíe una orden nueva.
+            \item Como en el caso 6 el $caudal\_obj$ fue pisado con $0.0$, al confirmarse la alarma el controlador envía al actuador la orden de ajustar a $0.0$. Así, el controlador se "desbloquea" lógicamente, pero la bomba no arranca físicamente hasta que un médico envíe una orden nueva.
         \end{itemize}
 
         \item \textbf{Luego de alarma crítica, recibe una nueva orden médica:}
         \begin{itemize}
-            \item $\delta_{ext}$: Independientemente de estar en $\text{BLOQUEADO\_CRITICO}$, si ingresa un valor por $in\_orden\_medica$, el modelo de ustedes entra directamente por los primeros dos casos (Caso 1 o Caso 2 detallados arriba). El controlador pasa directamente a $\text{PROC\_NORMAL}$ y emite la nueva orden, cancelando efectivamente el bloqueo.
+            \item $\delta_{ext}$: Independientemente de estar en $\text{BLOQUEADO\_CRITICO}$, si ingresa un valor por $in\_orden\_medica$, el modelo entra directamente por los primeros dos casos (Caso 1 o Caso 2 detallados arriba). El controlador pasa directamente a $\text{PROC\_NORMAL}$ y emite la nueva orden, cancelando efectivamente el bloqueo.
         \end{itemize}
     \end{enumerate}
 
