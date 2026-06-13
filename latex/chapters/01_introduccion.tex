@@ -1,0 +1,5 @@
+El presente documento detalla la especificación formal y el diseño de un modelo de simulación de eventos discretos (DEVS) para un sistema automático de administración de medicación intravenosa. Este sistema controla una bomba de infusión encargada de suministrar una droga a un paciente, respetando estrictamente una dosis objetivo indicada por el personal médico.
+
+En esta versión simplificada del controlador, el sistema tiene la responsabilidad de recibir órdenes médicas asíncronas, ajustar y monitorear el caudal administrado en tiempo real, detectar desviaciones persistentes generadas por perturbaciones físicas y reaccionar de manera segura ante el agotamiento de la bolsa de medicación. Además, incorpora un esquema jerárquico de gestión de alarmas para notificar al entorno médico.
+
+El objetivo principal de esta especificación es establecer una base matemática rigurosa que permita estudiar el comportamiento temporal del lazo cerrado, garantizando formalmente que las acciones de control, mitigación de fallas y detenciones preventivas ocurran dentro de los plazos críticos de seguridad establecidos.

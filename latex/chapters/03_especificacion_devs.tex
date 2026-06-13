@@ -35,6 +35,7 @@ donde:
     \item \(\delta_{int}(caudalObjetivo, \sigma) = (\text{Uniforme}(0, 200), \text{Exponencial}(1 / 300.0))\).
     \item \(\lambda(caudalObjetivo, \sigma) = (caudalObjetivo, out\_caudal\_obj)\).
     \item \(ta(caudalObjetivo, \sigma) = \sigma\).
+    \item \textbf{Justificación de las distribuciones:} La distribución \textbf{Uniforme (0, 200)} se utiliza para garantizar que el modelo genere órdenes que cubran todo el espectro de caudales válidos, probando el controlador ante casos extremos y transiciones abruptas sin sesgo. La distribución \textbf{Exponencial} para el tiempo de avance asume un proceso de Poisson sin memoria, lo cual es ideal para modelar la llegada impredecible y estocástica de nuevas prescripciones en un entorno hospitalario realista.
 \end{itemize}
 
 \subsection{Actuador de la Bomba ($A$)}
@@ -58,6 +59,7 @@ donde:
     \item $\delta_{int}(caudalReal, \sigma) = (caudalReal, \infty)$
     \item $\lambda(caudalReal, \sigma) = (caudalReal, out\_caudal\_real)$.
     \item $ta(caudalReal, \sigma) = \sigma$.
+    \item \textbf{Justificación del retardo:} Se implementó una distribución \textbf{Uniforme (0, 0.5)} para el tiempo de latencia mecánica. Los retardos físicos en motores no son constantes; modelarlo de manera uniforme asegura que el controlador demuestre ser robusto ante tiempos de reacción que varían aleatoriamente entre una acción casi instantánea y el retardo máximo tolerado.
 \end{itemize}
 
 \subsection{Sensor de Flujo ($G_{sf}$)}
@@ -85,6 +87,7 @@ donde:
     \item $\delta_{int}(caudalReal, caudalMedido, \sigma) = (caudalReal, \text{Normal}(caudalReal, (0.20 \cdot caudalReal)^2), 1.0)$
     \item $\lambda(caudalReal, caudalMedido, \sigma) = (caudalMedido, out\_caudal\_medido)$.
     \item $ta(caudalReal, caudalMedido, \sigma) = \sigma$.
+    \item \textbf{Justificación del ruido:} El uso de una distribución \textbf{Normal} simula fielmente la realidad física basándose en el Teorema del Límite Central. Las variaciones microscópicas en la tensión del motor, burbujas o vibraciones del tubo se acumulan formando un error Gaussiano, lo cual obliga al controlador a emplear una ventana de tolerancia temporal (5 segundos) para no detener la infusión por falsos positivos.
 \end{itemize}
 
 \subsection{Generador de Confirmaciones del Enfermero ($G_{ce}$)}
@@ -101,6 +104,7 @@ donde:
     \item $\delta_{int}(\sigma) = \text{Exponencial}(1 / 8.0)$.
     \item $\lambda(\sigma) = (confirmacionEnfermero, out\_conf)$.
     \item $ta(\sigma) = \sigma$.
+    \item \textbf{Justificación del retraso humano:} La distribución \textbf{Exponencial} modela adecuadamente el tiempo de respuesta del personal médico. Al tener una asimetría positiva, asegura que la mayoría de las veces el enfermero acuda rápido (promedio de 8 segundos), pero permite la ocurrencia esporádica de retrasos largos, lo que resulta fundamental para poner a prueba el mecanismo de repetición de la alarma crítica a los 30 y 10 segundos.
 \end{itemize}
 
 \subsection{Generador de Fin de Bolsa ($G_{fb}$)}
@@ -172,6 +176,13 @@ donde:
     \]
 
     \item $ta(fase, volRest, q, \sigma) = \sigma$.
+    \item \textbf{Explicación del comportamiento del modelo:}
+    \begin{itemize}
+        \item \textbf{Estados:} La fase \texttt{MONITOREANDO} indica que la bolsa contiene líquido suficiente y el componente está calculando el consumo activo. \texttt{ESPERANDO\_RELLENO} significa que se alcanzó el umbral crítico y el componente detiene sus cálculos hasta recibir una orden externa.
+        \item \textbf{Uso del caudal $q$:} Conservar el último caudal medido en el estado interno es vital porque el formalismo DEVS predice el futuro ($\sigma$). El valor de $q$ representa la "pendiente" de consumo necesaria para calcular exactamente en qué instante el volumen alcanzará la zona de peligro.
+        \item \textbf{Ecuaciones de actualización:} La función $vol'$ se encarga de descontar el volumen real consumido desde la última vez que el componente cambió de estado (usando el tiempo físico transcurrido $e$). La función $\hat{\sigma}$ divide el volumen restante por el caudal para obtener el tiempo total de vaciado, y le resta $T_a$ para determinar el tiempo exacto que falta para llegar al umbral de alerta.
+        \item \textbf{Transiciones:} En la $\delta_{ext}$, si cambia el caudal, se actualiza el volumen real y se recalcula dinámicamente $\hat{\sigma}$. Cuando $\sigma$ llega a cero, se ejecuta la $\delta_{int}$, el modelo dispara la alerta y entra en reposo absoluto.
+    \end{itemize}
 \end{itemize}
 
 \subsection{Módulo de Alarmas ($M_a$)}
@@ -257,6 +268,12 @@ donde:
     \]
 
     \item $ta(fase, a, \sigma) = \sigma$.
+    \item \textbf{Explicación del mecanismo de control de alarmas:}
+    \begin{itemize}
+        \item \textbf{Estados:} \texttt{OCIOSO} representa el silencio. \texttt{NOTIFICAR} es un estado efímero usado para despachar la señal física a tiempo cero. \texttt{ESPERANDO\_CONF} es la ventana de espera de 30 segundos, y \texttt{REPETIR} es el bucle de 10 segundos si el enfermero no asiste.
+        \item \textbf{Jerarquía ($prio$ y $a'$):} La variable $a'$ simplemente extrae el tipo de alarma que acaba de llegar por el puerto. La función $prio$ asigna un peso matemático a cada alarma. Esto garantiza la propiedad de seguridad fundamental: si una alarma crítica está activa (prioridad 3), un mensaje entrante de alarma baja (prioridad 1) será completamente ignorado en la $\delta_{ext}$, evitando sobrescribir la emergencia.
+        \item \textbf{Temporizadores en $\delta_{int}$:} Refleja directamente los requisitos operativos. Si es una alarma menor, vuelve a \texttt{OCIOSO}. Si es crítica, fija un $\sigma=30$. Si en 30 segundos no llega nada por $\delta_{ext}$, la $\delta_{int}$ transiciona a \texttt{REPETIR} y fija el ciclo de re-notificación cada $\sigma=10$.
+    \end{itemize}
 \end{itemize}
 
 \subsection{Controlador de Bomba ($C$)}
@@ -308,9 +325,11 @@ donde:
     \item $s_0 = (\text{NORMAL},\; 0.0,\; 0.0,\; 0.0,\; \text{CON\_LIQUIDO},\; [ ],\; \infty)$.
 
     \item Funciones auxiliares y variables de soporte. Denotamos $\text{head}(Q)$ como la función que extrae el primer elemento de una secuencia $Q$, $\text{tail}(Q)$ como la secuencia resultante tras remover su primer par mapeado, y el operador $\mathbin{++}$ como la concatenación de listas ordenadas. Para garantizar un comportamiento determinista y evitar el solapamiento de condiciones lógicas planas al ingresar datos por el puerto del sensor, se definen las siguientes variables matemáticas de actualización temporal previa:
+    \\\\La variable $D$ es una evaluación booleana que retorna verdadero únicamente si el sensor detecta una anomalía física que supera el $10\%$ del valor ideal prescrito.
     \[
     D = (caudal\_obj > 0) \land (|Xv - caudal\_obj| > 0.1 \cdot caudal\_obj)
     \]
+    \\\\ Como el Sensor de Flujo ($G_{sf}$) está diseñado para empujar una medición estrictamente cada 1 segundo exacto, el controlador aprovecha este evento periódico como un "reloj del sistema". Sumar $+1.0$ a $sd'$ (si $D$ es verdadero) o a $sb'$ (si la bolsa se está agotando) equivale a medir el paso del tiempo físico continuo de a tramos de un segundo, evitando errores de punto flotante.
     \[
     sd' = \begin{cases} seg\_desvio + 1.0 & \text{si } D \\ 0.0 & \text{en otro caso} \end{cases}
     \]
@@ -334,6 +353,7 @@ donde:
     \]
     La cola agregada unificada resultante se expresa mediante la concatenación directa de ambos buffers de falla:
     \[ Q_{nuevas} = Q_{desvio} \mathbin{++} Q_{bolsa} \]
+     \\Puesto que las comprobaciones de desvío y fin de bolsa son ortogonales, podrían cumplirse simultáneamente (ej. alarma media en el mismo segundo exacto del límite de 60s de la bolsa). Sumar ambas colas garantiza matemáticamente que el componente emitirá todas las acciones en ráfaga ($\sigma=0$) sin pérdida de información ni condiciones de carrera.
 
     \item Transición Interna. Descarta secuencialmente los elementos ya procesados por la función de salida. Si el buffer se vacía, evalúa la fase de origen para retornar al estado de reposo correspondiente:
 \[
@@ -385,6 +405,7 @@ donde:
     \quad \text{si } port = in\_conf\_enfermero \land fase = \text{NORMAL}
     \end{cases}
     \]
+    \\La Transición Externa es la responsable de evaluar todos los puertos, sumar los relojes, cargar las acciones requeridas en el buffer final y pasar a un estado \texttt{PROC\_*}. Luego, la Transición Interna opera simplemente como un mecanismo de descarga recursiva: consume la cola retirando el primer elemento y manteniéndose a tiempo 0 hasta que el buffer quede vacío. En ese instante, analiza el sufijo de su fase para retornar de forma segura a \texttt{NORMAL} o mantenerse en el estado \texttt{BLOQUEADO\_CRITICO}.
 
     \item Función de salida. Extrae de forma inmediata el par ordenado que encabeza la secuencia de salida activa:
     \[ \lambda(fase, caudal\_obj, seg\_desvio, seg\_fin\_bolsa, estado\_bolsa, cola\_salidas, \sigma) = \text{head}(cola\_salidas) \]

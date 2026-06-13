@@ -1,0 +1,15 @@
+El sistema de infusión opera bajo una arquitectura de lazo cerrado que interactúa con el entorno mediante un conjunto definido de estímulos y respuestas. 
+
+\section{Entradas y Salidas}
+El sistema recibe estímulos externos a través de cuatro eventos principales: \texttt{ordenMedica} (establece el caudal objetivo entre 0 y 200 ml/h), \texttt{sensorFlujo} (reporta el caudal real inyectado), \texttt{finBolsa} (alerta de agotamiento de fluidos) y \texttt{confirmacionEnfermero} (intervención humana ante alarmas).
+Como respuesta, el controlador emite comandos físicos hacia el actuador (\texttt{ajustarCaudal}, \texttt{detenerBomba}), dispara notificaciones de distinta severidad (\texttt{alarmaBaja}, \texttt{alarmaMedia}, \texttt{alarmaCritica}) y documenta su accionar mediante \texttt{registrarEvento}.
+
+\section{Restricciones y Requisitos Temporales}
+Para garantizar la seguridad del paciente, el diseño debe satisfacer los siguientes parámetros críticos:
+\begin{itemize}
+    \item Inicio de infusión: $< 3$ segundos tras recibir una orden válida.
+    \item Frecuencia de muestreo: El sensor de flujo emite lecturas exactas cada $1$ segundo.
+    \item Tolerancia a fallos: Un desvío de caudal $> 10\%$ tolerado por un máximo de $5$ segundos antes de emitir una alarma media. Si el fallo persiste, se escala a alarma crítica y se detiene la bomba.
+    \item Ciclo de alarmas críticas: Requieren confirmación humana en $30$ segundos; caso contrario, se repiten cada $10$ segundos.
+    \item Límite por fin de bolsa: La bomba opera un máximo de $60$ segundos adicionales antes de una detención automática y obligatoria.
+\end{itemize}
