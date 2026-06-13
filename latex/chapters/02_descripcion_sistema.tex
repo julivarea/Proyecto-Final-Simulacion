@@ -1,15 +1,27 @@
-El sistema de infusión opera bajo una arquitectura de lazo cerrado que interactúa con el entorno mediante un conjunto definido de estímulos y respuestas. 
+El sistema de infusión opera bajo una arquitectura de lazo cerrado compuesta por ocho modelos atómicos DEVS interconectados. La simulación es autocontenida: todos los estímulos son generados por componentes internos del modelo y la única salida observable desde el exterior es la notificación de alarmas al entorno hospitalario.
 
-\section{Entradas y Salidas}
-El sistema recibe estímulos externos a través de cuatro eventos principales: \texttt{ordenMedica} (establece el caudal objetivo entre 0 y 200 ml/h), \texttt{sensorFlujo} (reporta el caudal real inyectado), \texttt{finBolsa} (alerta de agotamiento de fluidos) y \texttt{confirmacionEnfermero} (intervención humana ante alarmas).
-Como respuesta, el controlador emite comandos físicos hacia el actuador (\texttt{ajustarCaudal}, \texttt{detenerBomba}), dispara notificaciones de distinta severidad (\texttt{alarmaBaja}, \texttt{alarmaMedia}, \texttt{alarmaCritica}) y documenta su accionar mediante \texttt{registrarEvento}.
+\section{Componentes del Sistema}
+El modelo acoplado se compone de los siguientes elementos:
+\begin{itemize}
+    \item \textbf{Generador de Órdenes Médicas ($G_{om}$):} Simula la llegada estocástica de prescripciones que establecen el caudal objetivo de infusión (entre 0 y 200 ml/h).
+    \item \textbf{Generador de Confirmaciones del Enfermero ($G_{ce}$):} Simula la intervención del personal de enfermería, emitiendo confirmaciones a intervalos aleatorios.
+    \item \textbf{Generador de Fin de Bolsa ($G_{fb}$):} Monitorea el volumen restante de líquido en la bolsa de infusión y emite una alerta preventiva cuando estima que quedan 60 segundos para su agotamiento.
+    \item \textbf{Controlador de Bomba ($C$):} Núcleo lógico del sistema. Recibe las órdenes médicas, las lecturas del sensor, las alertas de la bolsa y las confirmaciones del enfermero. Evalúa desviaciones de caudal y plazos de seguridad para coordinar las acciones del actuador y la activación jerárquica de alarmas.
+    \item \textbf{Actuador ($A$):} Modela la respuesta física de la bomba, aplicando una latencia mecánica aleatoria a las órdenes del controlador.
+    \item \textbf{Sensor de Flujo ($G_{sf}$):} Mide el caudal real entregado por el actuador, inyectando un ruido Gaussiano que simula las imprecisiones de un instrumento físico.
+    \item \textbf{Módulo de Alarmas ($M_a$):} Gestiona la presentación de alarmas al entorno hospitalario, implementando un esquema jerárquico de prioridades y un ciclo de re-notificación para alarmas críticas.
+    \item \textbf{Registrador de Eventos ($R_e$):} Componente sumidero que almacena la traza de auditoría de todas las decisiones tomadas por el controlador.
+\end{itemize}
+
+\section{Señales Internas}
+El Controlador de Bomba ($C$) constituye el punto de convergencia de las señales del sistema. Recibe cuatro tipos de estímulos internos: prescripciones médicas ($G_{om}$), lecturas del sensor de flujo ($G_{sf}$), alertas de agotamiento de la bolsa ($G_{fb}$) y confirmaciones del enfermero ($G_{ce}$). Como respuesta, emite comandos físicos hacia el Actuador (\texttt{ajustarCaudal}, \texttt{detenerBomba}), despacha alertas de tres niveles de severidad (baja, media y crítica) hacia el Módulo de Alarmas ($M_a$), y documenta cada decisión mediante tokens de auditoría enviados al Registrador de Eventos ($R_e$).
 
 \section{Restricciones y Requisitos Temporales}
-Para garantizar la seguridad del paciente, el diseño debe satisfacer los siguientes parámetros críticos:
+Para garantizar la seguridad del paciente, el diseño satisface los siguientes parámetros críticos:
 \begin{itemize}
-    \item Inicio de infusión: $< 3$ segundos tras recibir una orden válida.
-    \item Frecuencia de muestreo: El sensor de flujo emite lecturas exactas cada $1$ segundo.
-    \item Tolerancia a fallos: Un desvío de caudal $> 10\%$ tolerado por un máximo de $5$ segundos antes de emitir una alarma media. Si el fallo persiste, se escala a alarma crítica y se detiene la bomba.
-    \item Ciclo de alarmas críticas: Requieren confirmación humana en $30$ segundos; caso contrario, se repiten cada $10$ segundos.
-    \item Límite por fin de bolsa: La bomba opera un máximo de $60$ segundos adicionales antes de una detención automática y obligatoria.
+    \item \textbf{Latencia del actuador:} La bomba responde a cada orden del controlador con un retardo mecánico aleatorio de entre 0 y 0.5 segundos.
+    \item \textbf{Frecuencia de muestreo:} El sensor de flujo emite lecturas cada $1$ segundo.
+    \item \textbf{Detección de desvíos:} Un desvío de caudal mayor al $10\%$ respecto al objetivo es tolerado hasta 5 segundos, instante en que se emite una \textbf{alarma media}. Si persiste hasta los 10 segundos, se escala a \textbf{alarma crítica} y se detiene la bomba.
+    \item \textbf{Ciclo de alarmas críticas:} Requieren confirmación humana en $30$ segundos; de no recibirla, la alarma se repite cada $10$ segundos indefinidamente.
+    \item \textbf{Fin de bolsa:} Tras detectarse que quedan 60 segundos de líquido, la bomba opera ese tiempo adicional y luego se detiene automáticamente.
 \end{itemize}
