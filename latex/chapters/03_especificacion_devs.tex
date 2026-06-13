@@ -391,6 +391,99 @@ donde:
 
     \item Función de avance de tiempo:
     \[ ta(fase, caudal\_obj, seg\_desvio, seg\_fin\_bolsa, estado\_bolsa, cola\_salidas, \sigma) = \sigma \]
+
+\item \textbf{Trazas de Ejecución del Controlador} \\
+    A continuación se detalla el ciclo de ejecución de las funciones del formalismo DEVS para 12 escenarios clave, asumiendo que el controlador parte de un estado de reposo con $\sigma = \infty$:
+    
+    \begin{enumerate}
+        \item \textbf{Recibo orden médica con caudal 0:}
+        \begin{itemize}
+            \item \textbf{Estado Previo:} $fase = \text{NORMAL}$, $\sigma = \infty$.
+            \item $\delta_{ext}$: Entra por $port = in\_orden\_medica \land Xv = 0$. Pasa a la fase transitoria $\text{PROC\_NORMAL}$, actualiza $caudal\_obj = 0.0$, encola en $cola\_salidas$ los eventos $out\_detener\_bomba$ y el registro, y fija $\sigma = 0$.
+            \item $\lambda$ (inmediato): Extrae el primer elemento y lo emite al exterior: envía $\top$ por $out\_detener\_bomba$.
+            \item $\delta_{int}$: Remueve el elemento enviado ($\text{tail}$). Como aún queda el evento de registro en la cola, mantiene $\text{PROC\_NORMAL}$ y $\sigma = 0$.
+            \item $\lambda$: Emite $\text{DETENCION\_MEDICA}$ por $out\_registrar\_evento$.
+            \item $\delta_{int}$: Remueve el elemento. Ahora $\text{tail}(cola\_salidas) = [ ]$. Como la fase era $\text{PROC\_NORMAL}$, retorna al estado de reposo $\text{NORMAL}$ y fija $\sigma = \infty$.
+        \end{itemize}
+
+        \item \textbf{Recibo orden médica con caudal mayor que 0 (ej. 50 ml/h):}
+        \begin{itemize}
+            \item $\delta_{ext}$: Entra por $port = in\_orden\_medica \land Xv > 0$. Pasa a $\text{PROC\_NORMAL}$, actualiza $caudal\_obj = 50.0$, encola $out\_ajustar\_caudal$ con valor $50.0$ y el registro correspondiente, y fija $\sigma = 0$.
+            \item $\lambda$: Emite $50.0$ por $out\_ajustar\_caudal$.
+            \item $\delta_{int}$: Acorta la cola, mantiene $\sigma = 0$.
+            \item $\lambda$: Emite $\text{NUEVA\_ORDEN}$ por $out\_registrar\_evento$.
+            \item $\delta_{int}$: La cola queda vacía, retorna a $\text{NORMAL}$ y fija $\sigma = \infty$.
+        \end{itemize}
+
+        \item \textbf{Recibo un caudal real que NO difiere en más del 10\% del caudal objetivo:}
+        \begin{itemize}
+            \item \textbf{Condiciones:} La variable auxiliar $D$ evalúa en falso, por ende $sd' = 0.0$. $Q_{nuevas} = [ ]$.
+            \item $\delta_{ext}$: Entra al 6to caso ($port = in\_caudal\_medido \land fase \neq \text{BLOQUEADO\_CRITICO} \land Q_{nuevas} = [ ]$). El estado se mantiene en la misma fase ($\text{NORMAL}$), resetea $seg\_desvio = 0.0$ y actualiza el tiempo $\sigma = \sigma - e$ (que siendo $\infty$, sigue siendo $\infty$).
+            \item \textbf{Nota:} No se ejecutan ni $\lambda$ ni $\delta_{int}$ porque no hay salidas programadas ($\sigma \neq 0$).
+        \end{itemize}
+
+        \item \textbf{Recibo un caudal real que difiere en más de un 10\% durante MENOS de 5 segundos (ej. 3 segs):}
+        \begin{itemize}
+            \item \textbf{Condiciones:} $D$ es verdadero, $sd' = 3.0$. $Q_{nuevas} = [ ]$.
+            \item $\delta_{ext}$: Al igual que en el caso 3, entra al 6to caso ($Q_{nuevas} = [ ]$). Mantiene la fase $\text{NORMAL}$, pero guarda el acumulador actualizándolo a $seg\_desvio = 3.0$.
+            \item \textbf{Nota:} No hay salidas ($\lambda$) ni transiciones internas. El controlador acumula el tiempo silenciosamente.
+        \end{itemize}
+
+        \item \textbf{Recibo un caudal real que difiere en más de un 10\% llegando exactamente a 5 segundos:}
+        \begin{itemize}
+            \item \textbf{Condiciones:} $D$ es verdadero, $sd' = 5.0$. La variable auxiliar $Q_{desvio}$ se carga con la alarma media. $Q_{nuevas}$ ya no es vacío.
+            \item $\delta_{ext}$: Entra al 5to caso ($port = in\_caudal\_medido \land fase \neq \text{BLOQUEADO\_CRITICO} \land Q_{nuevas} \neq [ ] \land sd' \neq 10.0 \land sb' \neq 60.0$). Pasa a $\text{PROC\_NORMAL}$, encola la alarma media y el registro, fijando $\sigma = 0$.
+            \item $\lambda$ / $\delta_{int}$ / $\lambda$ / $\delta_{int}$: Vacían la cola enviando la alarma media hacia el Módulo de Alarmas. Vuelve a $\text{NORMAL}$ con $\sigma = \infty$.
+            \item \textbf{¿La alarma media detiene la bomba?} NO. Según los requisitos del sistema, la detención recién ocurre si el desvío persiste tras la alarma media. El modelo cumple con esto, ya que el arreglo $Q_{desvio}$ para $sd'=5.0$ solo incluye la alerta, no $out\_detener\_bomba$.
+        \end{itemize}
+
+        \item \textbf{Recibo un caudal real que difiere en más del 10\% durante 10 segundos:}
+        \begin{itemize}
+            \item \textbf{Condiciones:} $D$ es verdadero, $sd' = 10.0$. La variable auxiliar $Q_{desvio}$ carga la alarma crítica Y la orden de detener bomba.
+            \item $\delta_{ext}$: Entra al 3er caso ($port = in\_caudal\_medido \land \dots \land sd' = 10.0$). Ocurre un cambio fundamental: Pasa a la fase $\text{PROC\_BLOQUEADO}$, y sobrescribe $caudal\_obj = 0.0$, encolando los tres eventos (alarma crítica, detención y registro). $\sigma = 0$.
+            \item $\lambda$ / $\delta_{int}$: (Se repiten 3 veces). Emite alarma crítica, envía orden $out\_detener\_bomba$ al actuador, y registra.
+            \item $\delta_{int}$ final: Como la fase de origen era $\text{PROC\_BLOQUEADO}$, al vaciarse la cola el controlador NO vuelve a $\text{NORMAL}$, sino que transiciona a $\text{BLOQUEADO\_CRITICO}$ con $\sigma = \infty$.
+            \item \textbf{¿Detiene la bomba?} SÍ, el modelo envía el comando físico al actuador.
+        \end{itemize}
+
+        \item \textbf{La alarma crítica no es confirmada por el enfermero dentro de 30 segundos:}
+        \begin{itemize}
+            \item Aquí no hay ejecución en el Controlador de Bomba ($C$). El requisito temporal de repetir la alarma crítica cada 10 segundos recae estructuralmente en el Módulo de Alarmas ($M_a$). El Controlador ($C$) simplemente permanece inactivo en $\text{BLOQUEADO\_CRITICO}$ con $\sigma = \infty$.
+        \end{itemize}
+
+        \item \textbf{Se detecta fin bolsa:}
+        \begin{itemize}
+            \item $\delta_{ext}$: Entra por el caso $port = in\_fin\_bolsa$. Pasa a $\text{PROC\_NORMAL}$, cambia $estado\_bolsa = \text{POR\_AGOTARSE}$, resetea el contador $seg\_fin\_bolsa = 0.0$ y encola la alarma preventiva. $\sigma = 0$.
+            \item $\lambda$ / $\delta_{int}$: (Ciclo de vaciado de buffer) Envía $out\_alarma\_baja$ y registra. Vuelve a $\text{NORMAL}$.
+        \end{itemize}
+
+        \item \textbf{Fin bolsa + 60 segundos posteriores transcurridos:}
+        \begin{itemize}
+            \item \textbf{Contexto:} Durante 59 segundos llegaron lecturas de caudal, aumentando silenciosamente $sb'$.
+            \item \textbf{Condiciones en el seg 60:} $sb' = 60.0$. $Q_{bolsa}$ carga detención.
+            \item $\delta_{ext}$: Entra al 4to caso ($port = in\_caudal\_medido \land \dots \land sb' = 60.0 \land sd' \neq 10.0$). Pasa a $\text{PROC\_NORMAL}$, pisa $caudal\_obj = 0.0$ y encola la detención preventiva. $\sigma = 0$.
+            \item $\lambda$ / $\delta_{int}$: Se vacía la cola enviando $out\_detener\_bomba$. La bomba se detiene automáticamente transcurrido ese tiempo máximo. Retorna a $\text{NORMAL}$ (pero detenida).
+        \end{itemize}
+
+        \item \textbf{Luego de alarma crítica, la bomba permanece detenida (ignora lecturas):}
+        \begin{itemize}
+            \item \textbf{Contexto:} Estamos en $\text{BLOQUEADO\_CRITICO}$ (por el caso 6).
+            \item $\delta_{ext}$: Si el sensor sigue enviando lecturas ($port = in\_caudal\_medido$), entra al 7mo caso ($port = in\_caudal\_medido \land fase = \text{BLOQUEADO\_CRITICO}$). La función solo actualiza $\sigma - e$. No evalúa desvíos, no encola salidas y no acciona nada. La bomba queda inerte, asegurando el cumplimiento de la propiedad de seguridad (safety).
+        \end{itemize}
+
+        \item \textbf{Luego de alarma crítica, recibe confirmación de enfermero:}
+        \begin{itemize}
+            \item $\delta_{ext}$: Entra al penúltimo caso ($port = in\_conf\_enfermero \land fase = \text{BLOQUEADO\_CRITICO}$). Pasa a $\text{PROC\_NORMAL}$ y encola el ajuste de caudal junto al registro. $\sigma = 0$.
+            \item $\lambda$ / $\delta_{int}$: Vacía la cola. Vuelve a $\text{NORMAL}$ (desbloqueado).
+            \item \textbf{Detalle técnico elegante de su diseño:} Como en el caso 6 el $caudal\_obj$ fue pisado con $0.0$, al confirmarse la alarma el controlador envía al actuador la orden de ajustar a $0.0$. Así, el controlador se "desbloquea" lógicamente, pero la bomba no arranca físicamente hasta que un médico envíe una orden nueva.
+        \end{itemize}
+
+        \item \textbf{Luego de alarma crítica, recibe una nueva orden médica:}
+        \begin{itemize}
+            \item $\delta_{ext}$: Independientemente de estar en $\text{BLOQUEADO\_CRITICO}$, si ingresa un valor por $in\_orden\_medica$, el modelo de ustedes entra directamente por los primeros dos casos (Caso 1 o Caso 2 detallados arriba). El controlador pasa directamente a $\text{PROC\_NORMAL}$ y emite la nueva orden, cancelando efectivamente el bloqueo.
+        \end{itemize}
+    \end{enumerate}
+
 \end{itemize}
 
 \section{Especificación del Modelo Acoplado Global}
