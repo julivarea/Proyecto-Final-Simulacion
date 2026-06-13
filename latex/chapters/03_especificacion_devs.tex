@@ -546,7 +546,7 @@ donde:
 \end{itemize}
 
 \section{Especificación del Modelo Acoplado Global}
-El modelo acoplado global ($N$) integra todos los modelos atómicos previamente definidos para conformar el sistema de lazo cerrado completo. A continuación, se detallan las conexiones internas (IC), las entradas desde el entorno (EIC) y las salidas hacia el exterior (EOC) del sistema.
+El modelo acoplado global ($N$) integra todos los modelos atómicos previamente definidos para conformar el sistema de lazo cerrado completo. El sistema es autocontenido: no posee entradas externas (EIC), ya que todos los estímulos son generados por componentes internos ($G_{om}$, $G_{ce}$). La única salida hacia el exterior (EOC) es la notificación de alarma emitida por el Módulo de Alarmas. A continuación, se detallan las conexiones internas (IC) del sistema.
 
 \subsection{Conexiones del Sistema}
 \begin{itemize}
@@ -560,24 +560,17 @@ El modelo acoplado global ($N$) integra todos los modelos atómicos previamente 
         \item Despacha las alertas \texttt{out\_alarma\_baja}, \texttt{out\_alarma\_media} y \texttt{out\_alarma\_critica} hacia los puertos homónimos del \textbf{Módulo de Alarmas ($M_a$)}.
         \item Emite los tokens de auditoría desde \texttt{out\_registrar\_evento} hacia el puerto \texttt{in\_registrar} del \textbf{Registrador de Eventos ($R_e$)}.
     \end{itemize}
-    \item \textbf{Actuador de la Bomba ($A$):} Comunica el caudal físico a través de \texttt{out\_caudal\_real} hacia el puerto \texttt{in\_caudal\_real} del \textbf{Sensor de Flujo ($G_{sf}$)}. Este puerto también opera como una salida global del sistema (EOC) para observar la respuesta real de la bomba desde el exterior.
+    \item \textbf{Actuador de la Bomba ($A$):} Comunica el caudal físico a través de \texttt{out\_caudal\_real} hacia el puerto \texttt{in\_caudal\_real} del \textbf{Sensor de Flujo ($G_{sf}$)}.
     \item \textbf{Sensor de Flujo ($G_{sf}$):} Retroalimenta el valor sensado desde \texttt{out\_caudal\_medido} hacia el puerto \texttt{in\_caudal\_medido} del \textbf{Controlador ($C$)} y simultáneamente hacia la entrada \texttt{in\_caudal\_medido} del \textbf{Generador de Fin de Bolsa ($G_{fb}$)}.
     \item \textbf{Módulo de Alarmas ($M_a$):} Su puerto \texttt{out\_alarma} funciona como una salida global del sistema (EOC) para emitir notificaciones sonoras y visuales al entorno hospitalario.
-    \item \textbf{Entradas del Entorno (EIC):} El puerto \texttt{in\_rellenar} del \textbf{Generador de Fin de Bolsa ($G_{fb}$)} queda expuesto como una entrada externa del modelo acoplado para permitir que el entorno simule la reposición manual de líquido.
 \end{itemize}
 
 \subsection{Representación Gráfica}
-En la Figura \ref{fig:diagrama_acoplado} se presenta el diagrama de bloques del modelo acoplado, ilustrando la arquitectura de lazo cerrado, el flujo de señales entre los distintos componentes DEVS y la interacción con el entorno exterior.
+En la Figura \ref{fig:diagrama_acoplado} se presenta el diagrama de bloques del modelo acoplado, ilustrando la arquitectura de lazo cerrado y el flujo de señales entre los distintos componentes DEVS.
 
-\begin{figure}[h]
+\begin{figure}[ht]
     \centering
-    % Para incluir tu imagen final, simplemente quita el "%" de la línea de abajo y asegúrate de que el nombre del archivo coincida con el tuyo.
-    % \includegraphics[width=0.9\textwidth]{diagrama_acoplado.png}
-    
-    \vspace{2.5cm} % Este espacio mantiene la estructura del PDF mientras haces el dibujo
-    \textit{[Espacio reservado para el diagrama gráfico del modelo acoplado]}
-    \vspace{2.5cm}
-    
-    \caption{Diagrama de red del modelo acoplado global del sistema de infusión intravenosa.}
+    \includegraphics[width=0.9\textwidth]{assets/grafico-modelo-acoplado.jpg}
+    \caption{Diagrama de red del modelo acoplado global del sistema de infusión.}
     \label{fig:diagrama_acoplado}
 \end{figure}
