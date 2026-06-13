@@ -111,13 +111,14 @@ donde:
 Este componente modela la bolsa de infusión. Rastrea el volumen restante de líquido
 en base al caudal medido por el Sensor de Flujo y emite una señal de alerta cuando
 estima que quedan 60 segundos o menos para agotar la bolsa.
+Una vez emitida la alerta, el componente espera exactamente $T_a$ segundos adicionales (el tiempo restante para que la bolsa se vacíe por completo) y luego simula el relleno automático de la bolsa, restituyendo el volumen a su capacidad inicial.
 Se asume una capacidad de bolsa $V_0 = 500$ ml y un umbral de alerta $T_a = 60$ s.
 
 Matemáticamente, el modelo se define como:
 \[ G_{fb} = \langle X_{G_{fb}}, Y_{G_{fb}}, S_{G_{fb}}, \delta_{int}, \delta_{ext}, \lambda, ta \rangle \]
 donde:
 \begin{itemize}
-    \item $X_{G_{fb}} = ([0, 200] \times \{in\_caudal\_medido\}) \cup (\{\top\} \times \{in\_rellenar\})$
+    \item $X_{G_{fb}} = [0, 200] \times \{in\_caudal\_medido\}$
     \item $Y_{G_{fb}} = \{\top\} \times \{out\_fin\_bolsa\}$
     \item $S_{G_{fb}} = \{\text{MONITOREANDO}, \text{ESPERANDO\_RELLENO}\}
            \times \mathbb{R}_{\geq 0}
@@ -154,17 +155,23 @@ donde:
     \]
     \[
     \begin{cases}
-    (\text{ESPERANDO\_RELLENO},\; v',\; Xv,\; \infty) \\
-    \quad \text{si } port = in\_caudal\_medido \land fase = \text{ESPERANDO\_RELLENO} \\[2ex]
+    (\text{ESPERANDO\_RELLENO},\; v',\; Xv,\; \sigma - e) \\
+    \quad \text{si } fase = \text{ESPERANDO\_RELLENO} \\[2ex]
     (\text{MONITOREANDO},\; v',\; Xv,\; \hat{\sigma}(v', Xv)) \\
-    \quad \text{si } port = in\_caudal\_medido \land fase = \text{MONITOREANDO} \\[2ex]
-    (\text{MONITOREANDO},\; V_0,\; q,\; \hat{\sigma}(V_0, q)) \\
-    \quad \text{si } port = in\_rellenar
+    \quad \text{si } fase = \text{MONITOREANDO}
     \end{cases}
     \]
 
-    \item $\delta_{int}(fase, volRest, q, \sigma)
-           = (\text{ESPERANDO\_RELLENO},\; volRest,\; q,\; \infty)$
+    \item Transición Interna:
+    \[
+    \delta_{int}(fase, volRest, q, \sigma) =
+    \begin{cases}
+    (\text{ESPERANDO\_RELLENO},\; volRest,\; q,\; T_a) \\
+    \quad \text{si } fase = \text{MONITOREANDO} \\[2ex]
+    (\text{MONITOREANDO},\; V_0,\; q,\; \hat{\sigma}(V_0, q)) \\
+    \quad \text{si } fase = \text{ESPERANDO\_RELLENO}
+    \end{cases}
+    \]
 
     \item Función de salida:
     \[
@@ -178,10 +185,10 @@ donde:
     \item $ta(fase, volRest, q, \sigma) = \sigma$.
     \item \textbf{Explicación del comportamiento del modelo:}
     \begin{itemize}
-        \item \textbf{Estados:} La fase \texttt{MONITOREANDO} indica que la bolsa contiene líquido suficiente y el componente está calculando el consumo activo. \texttt{ESPERANDO\_RELLENO} significa que se alcanzó el umbral crítico y el componente detiene sus cálculos hasta recibir una orden externa.
+        \item \textbf{Estados:} La fase \texttt{MONITOREANDO} indica que la bolsa contiene líquido suficiente y el componente está calculando el consumo activo. \texttt{ESPERANDO\_RELLENO} significa que se alcanzó el umbral de alerta y el componente espera los $T_a$ segundos restantes para que la bolsa se vacíe por completo antes de simular su relleno automático.
         \item \textbf{Uso del caudal $q$:} Conservar el último caudal medido en el estado interno es vital porque el formalismo DEVS predice el futuro ($\sigma$). El valor de $q$ representa la "pendiente" de consumo necesaria para calcular exactamente en qué instante el volumen alcanzará la zona de peligro.
         \item \textbf{Ecuaciones de actualización:} La función $vol'$ se encarga de descontar el volumen real consumido desde la última vez que el componente cambió de estado (usando el tiempo físico transcurrido $e$). La función $\hat{\sigma}$ divide el volumen restante por el caudal para obtener el tiempo total de vaciado, y le resta $T_a$ para determinar el tiempo exacto que falta para llegar al umbral de alerta.
-        \item \textbf{Transiciones:} En la $\delta_{ext}$, si cambia el caudal, se actualiza el volumen real y se recalcula dinámicamente $\hat{\sigma}$. Cuando $\sigma$ llega a cero, se ejecuta la $\delta_{int}$, el modelo dispara la alerta y entra en reposo absoluto.
+        \item \textbf{Transiciones:} En la $\delta_{ext}$, si cambia el caudal, se actualiza el volumen real y se recalcula dinámicamente $\hat{\sigma}$. Cuando $\sigma$ llega a cero en fase \texttt{MONITOREANDO}, se ejecuta la $\delta_{int}$, el modelo dispara la alerta y pasa a \texttt{ESPERANDO\_RELLENO} con $\sigma = T_a$. Transcurridos esos $T_a$ segundos, la $\delta_{int}$ se ejecuta nuevamente, esta vez restituyendo el volumen a $V_0$ y retornando a \texttt{MONITOREANDO} para reiniciar el ciclo de monitoreo.
     \end{itemize}
 \end{itemize}
 
