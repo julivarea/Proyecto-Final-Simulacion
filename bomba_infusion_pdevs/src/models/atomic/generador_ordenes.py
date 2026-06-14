@@ -23,7 +23,7 @@ class GeneradorOrdenes(AtomicDEVS):
     def outputFnc(self):
         # lambda(caudalObjetivo, sigma) = (caudalObjetivo, out_caudal_obj)
         # PyPDEVS espera un diccionario que mapee el puerto al valor a emitir
-        return {self.out_caudal_obj: self.state["caudalObjetivo"]}
+        return {self.out_caudal_obj: [self.state["caudalObjetivo"]]}
 
     def intTransition(self):
         # delta_int(caudalObjetivo, sigma) = (Uniforme(0, 200), Exponencial(1/300.0))
