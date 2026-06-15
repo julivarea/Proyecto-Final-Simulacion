@@ -10,6 +10,7 @@ from src.models.atomic.generador_ordenes import GeneradorOrdenes
 from src.models.atomic.generador_conf import GeneradorConfirmaciones
 from src.models.atomic.generador_bolsa import GeneradorFinBolsa
 from src.models.atomic.sensor_flujo import SensorFlujo
+from src.models.atomic.registrador import RegistradorEventos
 
 class GeneradorManual(AtomicDEVS):
     """Generador que emite eventos específicos en tiempos específicos predefinidos."""
@@ -225,10 +226,49 @@ def correr_simulacion_sensor():
         print(f"    Rango:          [{min(valores):.2f}, {max(valores):.2f}] ml/h")
 
 
+class TestRegistrador(CoupledDEVS):
+    """Prueba del registrador de eventos: recibe eventos manuales y los acumula."""
+    def __init__(self, name="TestRegistrador"):
+        super().__init__(name)
+
+        # Usamos GeneradorManual para inyectar eventos en tiempos específicos
+        # Tiempos absolutos de llegada serán 5, 20 y 30
+        cronograma_eventos = [
+            {"delay": 5.0, "valor": "ALERTA: Bolsa Vacía"},
+            {"delay": 15.0, "valor": "COMANDO: Detener bomba"},
+            {"delay": 10.0, "valor": "INFO: Reanudar bomba"},
+            {"delay": 1000.0, "valor": "DUMMY"}
+        ]
+        
+        self.gen_eventos = self.addSubModel(GeneradorManual("GenEventos", cronograma_eventos))
+        self.registrador = self.addSubModel(RegistradorEventos("Registrador"))
+
+        self.connectPorts(self.gen_eventos.out_port, self.registrador.in_registrar)
+
+
+def correr_simulacion_registrador():
+    modelo_reg = TestRegistrador()
+    sim = Simulator(modelo_reg)
+    sim.setTerminationTime(40.0)
+    sim.simulate()
+
+    historial = modelo_reg.registrador.state["historial"]
+
+    print(f"\n{'='*60}")
+    print("TEST 4: REGISTRADOR DE EVENTOS (40s)")
+    print(f"{'='*60}")
+    print(f"  Eventos inyectados manualmente. Esperados en t=5.0s, t=20.0s y t=30.0s.")
+    print(f"  Cantidad de eventos registrados: {len(historial)}")
+    print(f"\n  Historial recuperado luego de la simulación:")
+    for entrada in historial:
+        print(f"    - Tiempo: {entrada['tiempo']:>5.2f}s | Evento: {entrada['evento']}")
+
+
 def main():
     correr_simulacion_base()
     correr_simulacion_variable()
     correr_simulacion_sensor()
+    correr_simulacion_registrador()
 
 
 if __name__ == "__main__":
