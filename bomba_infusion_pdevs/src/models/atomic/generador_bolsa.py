@@ -87,7 +87,7 @@ class GeneradorFinBolsa(AtomicDEVS):
             # El input fue un nuevo caudal del sensor
             nuevo_caudal_ml_h = inputs[self.in_caudal_medido][0]
         else:
-            # El input fue una confirmacion del enfer   mero
+            # El input fue una confirmacion del enfermero
             nuevo_caudal_ml_h = self.state["caudal_actual_ml_h"]
             
         fase = self.state["fase"]
