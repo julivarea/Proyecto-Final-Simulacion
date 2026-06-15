@@ -18,10 +18,12 @@ class GeneradorFinBolsa(AtomicDEVS):
         self.tiempo_anticipacion_alerta_segs = tiempo_anticipacion_alerta_segs
         
         # Puertos
+        # X_Gfb = [0,200] x {in_caudal_medido}
         self.in_caudal_medido = self.addInPort("in_caudal_medido")
+        # Y_Gfb = {T} x {out_fin_bolsa}
         self.out_fin_bolsa = self.addOutPort("out_fin_bolsa")
         
-        # Estado inicial
+        # Estado inicial s0 = (MONITOREANDO, V0, 0.0, inf)
         self.state = {
             "fase": FasesBolsa.MONITOREANDO,
             "volumen_restante_ml": self.capacidad_bolsa_ml,
@@ -85,7 +87,7 @@ class GeneradorFinBolsa(AtomicDEVS):
             # El input fue un nuevo caudal del sensor
             nuevo_caudal_ml_h = inputs[self.in_caudal_medido][0]
         else:
-            # El input fue una confirmacion del enfermero
+            # El input fue una confirmacion del enfer   mero
             nuevo_caudal_ml_h = self.state["caudal_actual_ml_h"]
             
         fase = self.state["fase"]
