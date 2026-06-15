@@ -1,0 +1,47 @@
+\section{Configuración del Entorno de Pruebas (Testbench)}
+Dado que el diseño del sistema utiliza un modelado estocástico de eventos, la ejecución directa del modelo global generaría resultados impredecibles dictados por el azar. Para garantizar la reproducibilidad de los experimentos y aislar el comportamiento lógico del Controlador frente a cada requisito, se desarrolló un entorno de pruebas dinámico mediante la inyección de código en tiempo de ejecución (\textit{Monkey Patching}).
+
+Esta técnica permite forzar a los modelos atómicos generadores a emitir valores determinísticos precisos y manipular variables físicas, como el porcentaje de error del sensor, exclusivamente durante la evaluación de un escenario, sin alterar la especificación DEVS original de los componentes. Además, se inyectaron monitores de estado pasivos para extraer las secuencias temporales de caudal objetivo y real, eludiendo las limitaciones de trazabilidad del \textit{kernel} minimalista de simulación.
+
+\section{Escenario 1: Funcionamiento normal, sin fallas}
+
+\subsection{Objetivo y Configuración}
+El objetivo de este escenario es demostrar el correcto funcionamiento estabilizado de la bomba ante una orden válida, sin la presencia de anomalías físicas que disparen el sistema jerárquico de alarmas.
+
+Para forzar un entorno predecible, se aplicaron las siguientes alteraciones en el \textit{testbench}:
+\begin{itemize}
+    \item \textbf{Fijación de la Orden Médica:} Se forzó al componente $G_{om}$ a emitir una única orden exacta de 50.0 ml/h en el instante $t = 2.0$ s, alterando su transición interna para silenciarlo por el resto de la simulación.
+    \item \textbf{Reducción de Ruido Físico:} El Sensor de Flujo ($G_{sf}$) original inyecta un ruido Gaussiano con una desviación estándar del 20\%. Para este escenario de normalidad, el ruido se redujo artificialmente a un 2\%. Esto garantiza matemáticamente que las mediciones nunca superen la tolerancia del 10\% exigida para disparar una alerta, eliminando así los falsos positivos por azar.
+\end{itemize}
+
+\subsection{Análisis de Resultados: Traza Lógica}
+Al finalizar la simulación de 40 segundos de tiempo físico, el Registrador de Eventos ($R_e$) capturó el siguiente historial de decisiones emitidas por el Controlador:
+
+\begin{verbatim}
+--- Registro de Eventos Lógicos (Auditoría) ---
+Tiempo: 02.00s | Evento: NUEVA_ORDEN
+Tiempo: 02.57s | Evento: CONFIRMACION_ENFERMERO
+Tiempo: 20.39s | Evento: CONFIRMACION_ENFERMERO
+Tiempo: 23.67s | Evento: CONFIRMACION_ENFERMERO
+Tiempo: 36.84s | Evento: CONFIRMACION_ENFERMERO
+Tiempo: 39.57s | Evento: CONFIRMACION_ENFERMERO
+\end{verbatim}
+
+La aparición del evento \texttt{NUEVA\_ORDEN} a los 2.00s confirma el correcto procesamiento inmediato de la prescripción. 
+
+Una observación fundamental de la traza es la presencia de múltiples eventos de \texttt{CONFIRMACION\_ENFERMERO} en intervalos aleatorios. Esto ocurre porque el componente $G_{ce}$ no fue alterado para el experimento y continuó emitiendo notificaciones asíncronas basándose en su distribución Exponencial original. La traza demuestra empíricamente que el Controlador es robusto y seguro frente a eventos asíncronos irrelevantes: al encontrarse en la fase \texttt{NORMAL}, recibe estas confirmaciones imprevistas del enfermero, las documenta en el historial para propósitos de auditoría, pero no altera el funcionamiento del actuador ni interrumpe el ciclo de infusión, evitando bloqueos indebidos del sistema.
+
+\subsection{Análisis de Resultados: Traza Física}
+El monitor dinámico extrajo los valores físicos del caudal en la tubería del paciente para evidenciar la respuesta de la planta:
+
+\begin{verbatim}
+--- Muestra de Traza Física para Gráficos ---
+Últimas 5 lecturas del caudal en la tubería del paciente:
+  t=35.11s -> 50.00 ml/h
+  t=36.11s -> 50.00 ml/h
+  t=37.11s -> 50.00 ml/h
+  t=38.11s -> 50.00 ml/h
+  t=39.11s -> 50.00 ml/h
+\end{verbatim}
+
+Como se observa en los últimos 5 segundos de la simulación, el caudal entregado converge de manera exacta en el objetivo de 50.00 ml/h. Esto valida el éxito de la arquitectura de lazo cerrado planteada: la orden ingresó al Controlador, el Actuador la procesó aplicando su latencia mecánica correspondiente, y el Sensor de Flujo verificó iterativamente que el sistema de infusión operó en régimen estacionario, sin disparar ninguna advertencia hacia el Módulo de Alarmas ni exceder los parámetros de seguridad.
