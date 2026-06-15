@@ -40,3 +40,15 @@ rm -rf PythonPDEVS/
 ```bash
 pip freeze > requirements.txt
 ```
+
+## Ejecución de las Pruebas
+
+Las pruebas de cada componente atómico se encuentran en la carpeta `tests/`. Para ejecutar la suite completa de pruebas, sitúate en la raíz del proyecto (`bomba_infusion_pdevs/`) y ejecuta:
+
+```bash
+# Asegúrate de tener el entorno virtual activado
+source ../venv/bin/activate
+
+# Ejecutar todos los tests de manera individual o la suite completa
+python -m tests.run_all
+```
