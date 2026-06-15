@@ -197,3 +197,44 @@ Tiempo: 24.11s | Evento: ALARMA_MEDIA
 \end{verbatim}
 
 El token de auditoría \texttt{ALARMA\_MEDIA} fue emitido en $t = 24.11$ s (exactamente 5 segundos luego de que el sensor registrara el primer desvío). Es de vital importancia notar que la bomba \textbf{no se detuvo}. Como lo indica la especificación, la aparición de una alarma media es una notificación que no interrumpe el actuador. El contador \texttt{seg\_desvio} continuó incrementándose hasta el valor 9.0, pero al restablecerse el sensor a 50.0 ml/h en el segundo 29.11, la falla fue mitigada automáticamente antes de alcanzar la condición de detención de los 10 segundos.
+
+\section{Escenario 6: Fin de bolsa con confirmación del enfermero}
+
+\subsection{Objetivo y Configuración}
+Este escenario somete a prueba la restricción de seguridad temporal asociada al vaciado de la reserva de fluidos. Según los requisitos del sistema, una vez que el Generador de Fin de Bolsa ($G_{fb}$) detecta que restan 60 segundos de fluido, la infusión debe entrar en una ventana de gracia tolerada. Finalizados exactamente esos 60 segundos, la bomba debe apagarse para evitar el ingreso de aire al torrente sanguíneo del paciente, independientemente de si el personal de enfermería confirmó o no la alarma preventiva.
+
+Para estructurar la prueba, se utilizó el \textit{testbench} inyectando un comportamiento determinístico en tres componentes:
+\begin{itemize}
+    \item Se inicializó la bomba en 50.0 ml/h en el instante $t = 2.0$ s.
+    \item Se alteró el componente $G_{fb}$ para emitir la alerta \texttt{fin\_bolsa} exactamente en $t = 20.0$ s.
+    \item Se alteró el generador $G_{ce}$ para simular la confirmación explícita del enfermero en $t = 25.0$ s.
+\end{itemize}
+
+\subsection{Análisis de Resultados: Dinámica Interna y Auditoría}
+El Registro de Eventos documenta la perfecta asimilación asíncrona de los estímulos programados en el Controlador (C):
+
+\begin{verbatim}
+--- Registro de Eventos Lógicos (Auditoría) ---
+Tiempo: 02.00s | Evento: NUEVA_ORDEN
+Tiempo: 20.00s | Evento: ALARMA_BAJA
+Tiempo: 20.00s | Evento: FIN_BOLSA_DETECTADO
+Tiempo: 25.00s | Evento: CONFIRMACION_ENFERMERO
+Tiempo: 80.00s | Evento: DETENCION_MEDICA
+\end{verbatim}
+
+En el segundo 20.00, el arribo de la señal de alerta provocó el paso a la fase \texttt{PROC\_NORMAL}, el cambio de la variable interna de estado a \texttt{POR\_AGOTARSE} y la notificación inmediata de la \texttt{ALARMA\_BAJA}. A los 25.00 segundos, el Controlador registró la \texttt{CONFIRMACION\_ENFERMERO}. Tal como prescribe el diseño, esta confirmación no interrumpió el proceso de infusión; simplemente silenció la advertencia a nivel del Módulo de Alarmas ($M_a$) mientras la planta física continuaba suministrando el medicamento.
+
+La validación del cumplimiento de seguridad se evidencia analizando el cronómetro interno y la salida del sensor:
+
+\begin{verbatim}
+--- Dinámica de Fin de Bolsa (Caudal y Cronómetro) ---
+Tiempo | Caudal Sensado | Segundos de Bolsa Acumulados
+ t=20.11s |    50.00 ml/h  | 1.0 s
+ t=21.11s |    50.00 ml/h  | 2.0 s
+ ...
+ t=79.11s |    50.00 ml/h  | 60.0 s
+ t=80.11s |    0.00 ml/h   | 60.0 s
+ t=81.11s |    0.00 ml/h   | 60.0 s
+\end{verbatim}
+
+Aprovechando el pulso constante de 1 segundo del Sensor de Flujo ($G_{sf}$), el Controlador incrementó de forma continua su variable \texttt{seg\_fin\_bolsa}. Exactamente al alcanzar el umbral de $sb' = 60.0$ en el instante $t = 80.0$ s (20s de origen + 60s de ventana), la condición de emergencia evaluó verdadera. Esto ensambló el buffer $Q_{bolsa}$ forzando la emisión del evento \texttt{DETENCION\_MEDICA} y el envío de un caudal objetivo de 0.0 hacia el Actuador (A). La lectura del sensor cayendo a 0.00 ml/h en el segundo 80.11 ratifica que el paciente quedó protegido exitosamente en el límite temporal exacto exigido por el proyecto.
