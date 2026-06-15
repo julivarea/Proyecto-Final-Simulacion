@@ -120,3 +120,39 @@ La lectura del caudal real capturada por el monitor del Sensor de Flujo ($G_{sf}
 \end{verbatim}
 
 Los datos de la planta demuestran que, tras el procesamiento lógico del Controlador a los 20 segundos, el comando físico impactó en el Actuador (A), anulando el flujo de infusión. Al estabilizarse en un valor estricto de 0.00 ml/h durante todo el resto del experimento, se verifica empíricamente que la bomba permanece inerte y segura en resguardo de la salud del paciente.
+
+\section{Escenario 4: Desvío leve de caudal tolerado por el controlador}
+
+\subsection{Objetivo y Configuración}
+El propósito de este ensayo es comprobar el funcionamiento de la ventana temporal de tolerancia a ruidos e imprecisiones mecánicas. Según los requisitos, el Controlador no debe emitir notificaciones por desviaciones transitorias que superen el límite de seguridad (10\% del objetivo) siempre y cuando se corrijan y retornen al margen seguro antes de superar los 5 segundos de duración.
+
+Para simular este efecto sin depender de la aleatoriedad, el \textit{testbench} fue programado para interceptar directamente la función de salida del modelo atómico del Sensor de Flujo ($G_{sf}$). Mientras la bomba mantenía un objetivo de 50.0 ml/h, se inyectó una perturbación determinística en la lectura, elevando artificialmente el caudal sensado a 60.0 ml/h (un 20\% de desvío, claramente superior al umbral) únicamente durante una ventana de 4 segundos (entre los instantes $t = 20.0$ y $t = 23.5$ s). Inmediatamente después, se restauró el valor nominal. Se instrumentaron sondas adicionales en el Controlador ($C$) para registrar la evolución continua de su variable de estado interna \texttt{seg\_desvio}.
+
+\subsection{Análisis de Resultados: Dinámica Interna y Auditoría}
+La observación de las variables internas y los eventos emitidos ratifica de manera concluyente la robustez del diseño frente a fluctuaciones transitorias:
+
+\begin{verbatim}
+--- Dinámica del Desvío (Variables Internas del Controlador) ---
+Tiempo | Caudal Sensado | Segundos de Desvío Acumulado
+ t=19.11s |    50.00 ml/h  | 0.0 s
+ t=20.11s |    60.00 ml/h  | 1.0 s
+ t=21.11s |    60.00 ml/h  | 2.0 s
+ t=22.11s |    60.00 ml/h  | 3.0 s
+ t=23.11s |    60.00 ml/h  | 4.0 s
+ t=24.11s |    50.00 ml/h  | 0.0 s
+ t=25.11s |    50.00 ml/h  | 0.0 s
+\end{verbatim}
+
+A partir del segundo 20.11, la evaluación lógica interna $D$ del Controlador se volvió verdadera al detectar el caudal anómalo de 60.0 ml/h. En las transiciones externas iterativas posteriores, la variable acumuladora \texttt{seg\_desvio} se incrementó segundo a segundo ($1.0, 2.0, 3.0, 4.0$), acumulando el tiempo de riesgo de manera silenciosa tal cual indica la especificación matemática. 
+
+Crucialmente, en el instante $t = 24.11$ s, cuando la perturbación cesó y el sensor volvió a transmitir 50.0 ml/h, la condición $D$ pasó a falsa. Esto provocó el reinicio inmediato de la variable \texttt{seg\_desvio} a $0.0$, deteniendo el conteo una iteración antes de alcanzar el umbral crítico de 5.0 segundos requerido para ensamblar y despachar el buffer $Q_{desvio}$. 
+
+\begin{verbatim}
+--- Registro de Eventos Lógicos (Auditoría) ---
+Tiempo: 02.00s | Evento: NUEVA_ORDEN
+Tiempo: 02.57s | Evento: CONFIRMACION_ENFERMERO
+Tiempo: 20.39s | Evento: CONFIRMACION_ENFERMERO
+Tiempo: 23.67s | Evento: CONFIRMACION_ENFERMERO
+\end{verbatim}
+
+El registro histórico del Registrador ($R_e$) certifica el éxito del caso de uso. Al no registrarse tokens de \texttt{ALARMA\_MEDIA} ni \texttt{DETENCION\_MEDICA}, se verifica que el controlador filtró exitosamente el ruido mecánico transitorio, evitando disparar falsas alarmas que interrumpirían innecesariamente la terapia intravenosa del paciente.
