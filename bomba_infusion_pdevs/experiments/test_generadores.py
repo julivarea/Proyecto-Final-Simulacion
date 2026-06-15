@@ -1,12 +1,15 @@
 """
-Test de simulación para los generadores (G_om, G_ce y G_fb).
+Test de simulación para los generadores (G_om, G_ce, G_fb) y el sensor de flujo (G_sf).
 """
+import statistics
+
 from pypdevs.minimal import AtomicDEVS, CoupledDEVS, Simulator
 from pypdevs.infinity import INFINITY
 
 from src.models.atomic.generador_ordenes import GeneradorOrdenes
 from src.models.atomic.generador_conf import GeneradorConfirmaciones
 from src.models.atomic.generador_bolsa import GeneradorFinBolsa
+from src.models.atomic.sensor_flujo import SensorFlujo
 
 class GeneradorManual(AtomicDEVS):
     """Generador que emite eventos específicos en tiempos específicos predefinidos."""
@@ -175,9 +178,57 @@ def correr_simulacion_variable():
         print(f"    - Tiempo: {e['tiempo']:>7.2f}s | ¡Alarma Bolsa Vacía! (Valor: {e['valor']})")
 
 
+class TestSensorFlujo(CoupledDEVS):
+    """Prueba del sensor de flujo: recibe un caudal fijo y muestrea con ruido Gaussiano."""
+    def __init__(self, name="TestSensorFlujo"):
+        super().__init__(name)
+
+        # Inyectamos un caudal constante de 100 ml/h al segundo 1
+        cronograma_caudal = [{"delay": 1.0, "valor": 100.0}]
+        self.gen_caudal = self.addSubModel(GeneradorManual("FuenteCaudal", cronograma_caudal))
+        self.sensor = self.addSubModel(SensorFlujo())
+        self.rec_sensor = self.addSubModel(Recolector("Rec_sensor"))
+
+        self.connectPorts(self.gen_caudal.out_port, self.sensor.in_caudal_real)
+        self.connectPorts(self.sensor.out_caudal_medido, self.rec_sensor.in_port)
+
+
+def correr_simulacion_sensor():
+    modelo_sensor = TestSensorFlujo()
+    sim = Simulator(modelo_sensor)
+    # 22 segundos: 1s de espera + 1 lectura inmediata + 20 lecturas periódicas
+    sim.setTerminationTime(22.0)
+    sim.simulate()
+
+    eventos_sensor = modelo_sensor.rec_sensor.state["eventos"]
+    valores = [e["valor"] for e in eventos_sensor]
+
+    print(f"\n{'='*60}")
+    print("TEST 3: SENSOR DE FLUJO CON RUIDO GAUSSIANO (22s)")
+    print(f"{'='*60}")
+    print(f"  Caudal real inyectado: 100.00 ml/h (constante)")
+    print(f"  Lecturas recolectadas: {len(valores)}")
+    print(f"  (Esperado: ~1 lectura por segundo con ruido Normal(100, 20²))")
+    print(f"\n  Primeras 10 lecturas del sensor:")
+    for e in eventos_sensor[:10]:
+        error_porcentual = ((e["valor"] - 100.0) / 100.0) * 100
+        print(f"    - Tiempo: {e['tiempo']:>5.2f}s | Medición: {e['valor']:>7.2f} ml/h | Error: {error_porcentual:>+6.2f}%")
+    if len(eventos_sensor) > 10:
+        print("    ... (truncado)")
+
+    if len(valores) >= 2:
+        media = statistics.mean(valores)
+        desvio = statistics.stdev(valores)
+        print(f"\n  Estadísticas:")
+        print(f"    Media:          {media:>7.2f} ml/h (esperado: ~100.00)")
+        print(f"    Desvío estándar: {desvio:>6.2f} ml/h (esperado: ~20.00)")
+        print(f"    Rango:          [{min(valores):.2f}, {max(valores):.2f}] ml/h")
+
+
 def main():
     correr_simulacion_base()
     correr_simulacion_variable()
+    correr_simulacion_sensor()
 
 
 if __name__ == "__main__":
