@@ -9,6 +9,8 @@ from tests.test_generador_conf import correr_test as test_conf
 from tests.test_generador_bolsa import correr_test as test_bolsa
 from tests.test_sensor_flujo import correr_test as test_sensor
 from tests.test_registrador import correr_test as test_registrador
+from tests.test_actuador import correr_test as test_actuador
+from tests.test_modulo_alarmas import correr_test as test_alarmas
 
 def main():
     print("="*80)
@@ -20,6 +22,8 @@ def main():
     test_bolsa()
     test_sensor()
     test_registrador()
+    test_actuador()
+    test_alarmas()
     
     print("\n" + "="*80)
     print("TODOS LOS TESTS FINALIZARON CON ÉXITO")
