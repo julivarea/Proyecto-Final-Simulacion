@@ -45,3 +45,41 @@ El monitor dinámico extrajo los valores físicos del caudal en la tubería del 
 \end{verbatim}
 
 Como se observa en los últimos 5 segundos de la simulación, el caudal entregado converge de manera exacta en el objetivo de 50.00 ml/h. Esto valida el éxito de la arquitectura de lazo cerrado planteada: la orden ingresó al Controlador, el Actuador la procesó aplicando su latencia mecánica correspondiente, y el Sensor de Flujo verificó iterativamente que el sistema de infusión operó en régimen estacionario, sin disparar ninguna advertencia hacia el Módulo de Alarmas ni exceder los parámetros de seguridad.
+
+\section{Escenario 2: Cambio de orden médica durante la infusión}
+
+\subsection{Objetivo y Configuración}
+El objetivo de este escenario es verificar la capacidad del Controlador para procesar de forma dinámica una actualización en la prescripción médica, ajustando el caudal físico en tiempo real sin requerir un reinicio del sistema ni provocar inestabilidades.
+
+Para este experimento, se extendió la técnica de inyección en el Generador de Órdenes ($G_{om}$) implementando una pequeña máquina de estados en su transición interna. Esto permitió programar la emisión determinística de dos eventos secuenciales: una orden inicial de 50.0 ml/h en el instante $t = 2.0$ s, seguida de una actualización a 80.0 ml/h en el instante $t = 20.0$ s. Al igual que en el Escenario 1, el ruido del sensor se mantuvo reducido al 2\% para aislar el análisis de la transición lógica entre órdenes.
+
+\subsection{Análisis de Resultados: Traza Lógica}
+Tras extender el tiempo de simulación a 50 segundos, el Registrador de Eventos ($R_e$) arrojó el siguiente historial:
+
+\begin{verbatim}
+--- Registro de Eventos Lógicos (Auditoría) ---
+Tiempo: 02.00s | Evento: NUEVA_ORDEN
+Tiempo: 02.57s | Evento: CONFIRMACION_ENFERMERO
+Tiempo: 20.00s | Evento: NUEVA_ORDEN
+Tiempo: 20.39s | Evento: CONFIRMACION_ENFERMERO
+Tiempo: 35.44s | Evento: CONFIRMACION_ENFERMERO
+Tiempo: 38.17s | Evento: CONFIRMACION_ENFERMERO
+Tiempo: 46.25s | Evento: CONFIRMACION_ENFERMERO
+\end{verbatim}
+
+El registro refleja con precisión la ejecución del plan de pruebas: se observan dos eventos \texttt{NUEVA\_ORDEN} procesados de manera exitosa en los segundos 2.00 y 20.00. Nuevamente, la persistencia de los eventos asíncronos \texttt{CONFIRMACION\_ENFERMERO} corrobora que el componente $G_{ce}$ continúa funcionando de manera estocástica en segundo plano. El Controlador, al mantenerse ininterrumpidamente en la fase \texttt{NORMAL}, registra estas confirmaciones como eventos de auditoría inofensivos sin interferir con la infusión.
+
+\subsection{Análisis de Resultados: Traza Física}
+La lectura del monitor dinámico acoplado a la salida del Sensor de Flujo en los instantes finales de la simulación refleja lo siguiente:
+
+\begin{verbatim}
+--- Muestra de Traza Física para Gráficos ---
+Últimas 5 lecturas del caudal en la tubería del paciente:
+  t=45.11s -> 80.00 ml/h
+  t=46.11s -> 80.00 ml/h
+  t=47.11s -> 80.00 ml/h
+  t=48.11s -> 80.00 ml/h
+  t=49.11s -> 80.00 ml/h
+\end{verbatim}
+
+La estabilización exacta del caudal físico en 80.00 ml/h hacia el final de la prueba demuestra el cumplimiento exitoso del requisito. El Controlador asimiló la nueva orden, transmitió el diferencial de ajuste al Actuador, y el lazo cerrado convergió a la nueva tasa de infusión sin disparar falsas alarmas por desvío durante el período de ajuste mecánico transitorio.
