@@ -30,7 +30,9 @@ class SensorFlujo(AtomicDEVS):
         super().__init__(name)
 
         # Puertos
+        # X_Gsf = [0,200] x {in_caudal_real}
         self.in_caudal_real = self.addInPort("in_caudal_real")
+        # Y_Gsf = [0,200] x {out_caudal_medido}
         self.out_caudal_medido = self.addOutPort("out_caudal_medido")
 
         # Estado inicial: s0 = (0.0, 0.0, INFINITY)
