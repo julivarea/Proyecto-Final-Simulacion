@@ -238,3 +238,38 @@ Tiempo | Caudal Sensado | Segundos de Bolsa Acumulados
 \end{verbatim}
 
 Aprovechando el pulso constante de 1 segundo del Sensor de Flujo ($G_{sf}$), el Controlador incrementó de forma continua su variable \texttt{seg\_fin\_bolsa}. Exactamente al alcanzar el umbral de $sb' = 60.0$ en el instante $t = 80.0$ s (20s de origen + 60s de ventana), la condición de emergencia evaluó verdadera. Esto ensambló el buffer $Q_{bolsa}$ forzando la emisión del evento \texttt{DETENCION\_MEDICA} y el envío de un caudal objetivo de 0.0 hacia el Actuador (A). La lectura del sensor cayendo a 0.00 ml/h en el segundo 80.11 ratifica que el paciente quedó protegido exitosamente en el límite temporal exacto exigido por el proyecto.
+
+\section{Escenario 7: Alarma crítica no confirmada durante 30 segundos}
+
+\subsection{Objetivo y Configuración}
+Este experimento evalúa la propiedad de vivacidad (\textit{liveness}) estipulada para el sistema jerárquico de notificaciones: si una alarma crítica (asociada a la detención de emergencia de la bomba) no es confirmada por el personal humano en un plazo de 30 segundos, el sistema debe iniciar un ciclo de re-notificación perpetuo con un período de 10 segundos para garantizar la atención del paciente.
+
+Para inducir este estado, el \textit{testbench} inyectó una anomalía severa del 30\% en el Sensor de Flujo ($G_{sf}$) a partir del instante $t = 20.0$ s de manera indefinida. Simultáneamente, se alteró la transición interna del Generador de Confirmaciones ($G_{ce}$) fijando su tiempo de avance $\sigma = \infty$, silenciándolo de forma absoluta para simular la ausencia total del enfermero. Se instrumentó una sonda en la función de salida del Módulo de Alarmas ($M_a$) para registrar las emisiones acústicas/visuales proyectadas al entorno.
+
+\subsection{Análisis de Resultados: Lógica de Detención y Bloqueo}
+El Registrador de Eventos ($R_e$) capturó la escalada de la severidad del desvío en el Controlador (C):
+
+\begin{verbatim}
+--- Registro de Eventos Lógicos (Auditoría) ---
+Tiempo: 02.00s | Evento: NUEVA_ORDEN
+Tiempo: 25.00s | Evento: ALARMA_MEDIA
+Tiempo: 30.00s | Evento: ALARMA_CRITICA
+Tiempo: 30.00s | Evento: DETENCION_MEDICA
+\end{verbatim}
+
+A los 5 segundos de iniciada la falla ($t = 25.0$ s), el Controlador despachó la alerta preventiva. Al persistir el desvío hasta los 10 segundos ($t = 30.0$ s), el componente ejecutó el conjunto de acciones $Q_{desvio}$ correspondientes al desvío crítico: emitió la alerta máxima, ordenó al actuador interrumpir la infusión y transicionó al estado \texttt{BLOQUEADO\_CRITICO}. Como se observa, el historial queda en silencio a partir de ese instante. El Controlador, al estar bloqueado, ignora de manera segura las lecturas periódicas subsiguientes del sensor averiado y delega la responsabilidad de notificación al módulo $M_a$.
+
+\subsection{Análisis de Resultados: Traza de Repetición de Alarmas}
+La recolección de las emisiones físicas despachadas por el puerto \texttt{out\_alarma} del Módulo de Alarmas ($M_a$) demuestra el cumplimiento exacto del requisito de \textit{liveness}:
+
+\begin{verbatim}
+--- Dinámica del Módulo de Alarmas ---
+Historial de emisiones físicas hacia el entorno hospitalario:
+ t=25.00s -> Emite Sonido/Luz: MEDIA
+ t=30.00s -> Emite Sonido/Luz: CRITICA
+ t=60.00s -> Emite Sonido/Luz: CRITICA
+ t=70.00s -> Emite Sonido/Luz: CRITICA
+ t=80.00s -> Emite Sonido/Luz: CRITICA
+\end{verbatim}
+
+El registro exhibe la mecánica de las transiciones internas de $M_a$. Tras notificar el estado crítico original a los 30.00 segundos, el módulo transicionó al estado \texttt{ESPERANDO\_CONF} con un $\sigma = 30.0$. Al no recibir estímulos externos en el puerto \texttt{in\_conf} por la ausencia del enfermero, la transición interna se ejecutó por agotamiento de tiempo a los 60.00 segundos, efectuando la primera repetición de la alarma. A partir de allí, el módulo ingresó al bucle \texttt{REPETIR} reconfigurando su avance temporal a $\sigma = 10.0$, emitiendo de manera ininterrumpida a los 70.00 y 80.00 segundos. El experimento valida formalmente que el sistema no quedará silenciado ante una falla severa desatendida.
