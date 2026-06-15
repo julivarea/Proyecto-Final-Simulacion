@@ -83,3 +83,40 @@ La lectura del monitor dinámico acoplado a la salida del Sensor de Flujo en los
 \end{verbatim}
 
 La estabilización exacta del caudal físico en 80.00 ml/h hacia el final de la prueba demuestra el cumplimiento exitoso del requisito. El Controlador asimiló la nueva orden, transmitió el diferencial de ajuste al Actuador, y el lazo cerrado convergió a la nueva tasa de infusión sin disparar falsas alarmas por desvío durante el período de ajuste mecánico transitorio.
+
+\section{Escenario 3: Orden médica con caudal igual a cero}
+
+\subsection{Objetivo y Configuración}
+El objetivo de este escenario es verificar el cumplimiento de una de las propiedades de seguridad básicas (\textit{safety}): la bomba debe interrumpir de inmediato el suministro físico de fluidos si la última prescripción médica recibida indica un caudal igual a cero.
+
+Para este experimento, el Generador de Órdenes ($G_{om}$) fue configurado mediante el banco de pruebas para iniciar la infusión con una tasa estándar de 50.0 ml/h en el segundo $t = 2.0$ s (permitiendo que el sistema entre en régimen estacionario) e inyectar de forma determinística la orden de parada con caudal 0.0 ml/h exactamente en el segundo $t = 20.0$ s. El ruido instrumental del sensor de flujo se mantuvo mitigado al 2\% para este ensayo de transiciones lógicas.
+
+\subsection{Análisis de Resultados: Traza Lógica}
+Al finalizar la simulación, la auditoría del Registrador de Eventos ($R_e$) capturó la siguiente secuencia de estados lógicos:
+
+\begin{verbatim}
+--- Registro de Eventos Lógicos (Auditoría) ---
+Tiempo: 02.00s | Evento: NUEVA_ORDEN
+Tiempo: 02.57s | Evento: CONFIRMACION_ENFERMERO
+Tiempo: 20.00s | Evento: DETENCION_MEDICA
+Tiempo: 20.39s | Evento: CONFIRMACION_ENFERMERO
+Tiempo: 21.17s | Evento: CONFIRMACION_ENFERMERO
+Tiempo: 21.98s | Evento: CONFIRMACION_ENFERMERO
+\end{verbatim}
+
+El historial convalida formalmente las ecuaciones del modelo: en el instante $t = 20.00$ s, ante el estímulo por el puerto $in\_orden\_medica$ con $Xv = 0$, el Controlador (C) transicionó correctamente al caso 1 de su función $\delta_{ext}$. El componente pasó de forma transitoria a la fase \texttt{PROC\_NORMAL}, cargó la orden física de detención y el token \texttt{DETENCION\_MEDICA} en su buffer FIFO, descargándolos a tiempo físico cero ($\sigma = 0$). Los eventos de enfermería registrados inmediatamente después ($t = 20.39$ s, $t = 21.17$ s, etc.) reconfirman que el sistema asimila e ignora con seguridad estímulos concurrentes menores en estado de reposo.
+
+\subsection{Análisis de Resultados: Traza Física}
+La lectura del caudal real capturada por el monitor del Sensor de Flujo ($G_{sf}$) en la última sección de la prueba arrojó:
+
+\begin{verbatim}
+--- Muestra de Traza Física para Gráficos ---
+Últimas 5 lecturas del caudal en la tubería del paciente:
+  t=30.11s -> 0.00 ml/h
+  t=31.11s -> 0.00 ml/h
+  t=32.11s -> 0.00 ml/h
+  t=33.11s -> 0.00 ml/h
+  t=34.11s -> 0.00 ml/h
+\end{verbatim}
+
+Los datos de la planta demuestran que, tras el procesamiento lógico del Controlador a los 20 segundos, el comando físico impactó en el Actuador (A), anulando el flujo de infusión. Al estabilizarse en un valor estricto de 0.00 ml/h durante todo el resto del experimento, se verifica empíricamente que la bomba permanece inerte y segura en resguardo de la salud del paciente.
