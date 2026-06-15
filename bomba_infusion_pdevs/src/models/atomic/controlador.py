@@ -137,7 +137,7 @@ class ControladorBomba(AtomicDEVS):
                 return self.state
 
             # El desvío supera el 10%?
-            D = caudal_obj > 0 and abs(xv - caudal_obj) > (0.10 * caudal_obj):
+            D = caudal_obj > 0 and abs(xv - caudal_obj) > (0.10 * caudal_obj)
 
             # Variables temporales matemáticas (sd' y sb')
             # Se suma 1.0 porque el sensor emite estrictamente cada 1 segundo
