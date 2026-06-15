@@ -23,7 +23,7 @@ def ejecutar_escenario_02():
     modelo = BombaAcoplada(name="Bomba_Esc_02_Cambio_Orden")
 
     # Parcheo del Generador de Órdenes (G_om)
-    # 1er evento: emitimos exactamente 50.0 ml/h en el segundo 2.0
+    # emitimos exactamente 50.0 ml/h en el segundo 2.0
     modelo.g_om.state["caudalObjetivo"] = 50.0
     modelo.g_om.state["sigma"] = 2.0
     modelo.g_om.state["paso_orden"] = 1 # Variable bandera nuestra
