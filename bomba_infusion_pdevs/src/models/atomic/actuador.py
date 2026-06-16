@@ -45,7 +45,7 @@ class ActuadorBomba(AtomicDEVS):
         
         if self.in_caudal_obj in inputs:
             nuevo_caudal = inputs[self.in_caudal_obj][0]
-            self.state["caudal_real_ml_h"] = nuevo_caudal
+            self.state["caudal_real_ml_h"] = max(0.0, min(200.0, nuevo_caudal))
             
             # (Xv, Uniforme(0, 0.5)) si port = in_caudal_obj
             self.state["sigma"] = uniforme(0.0, 0.5)

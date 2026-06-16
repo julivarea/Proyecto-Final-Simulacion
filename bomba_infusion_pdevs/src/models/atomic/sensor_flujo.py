@@ -12,11 +12,13 @@ def _aplicar_ruido_gaussiano(caudal_real_ml_h):
     Aplica ruido Gaussiano del 20% al caudal real.
     Normal(caudalReal, (0.20 * caudalReal)^2)
     Si el caudal es 0, no hay ruido posible (desvío = 0).
+    Asegura físicamente que la lectura esté en [0.0, 200.0].
     """
     if caudal_real_ml_h == 0.0:
         return 0.0
     varianza = (PORCENTAJE_RUIDO_SENSOR * caudal_real_ml_h) ** 2
-    return normal(caudal_real_ml_h, varianza)
+    ruido = normal(caudal_real_ml_h, varianza)
+    return max(0.0, min(200.0, ruido))
 
 
 class SensorFlujo(AtomicDEVS):
