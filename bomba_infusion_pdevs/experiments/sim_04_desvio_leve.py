@@ -80,6 +80,8 @@ def ejecutar_escenario_04():
         desv = next((val for t, val in reversed(trazas["desvio"]) if t <= t_esperado), 0.0)
         estado = "FALLA INYECTADA" if 20.0 <= t_esperado <= 23.5 else "OK"
         print(f" t={t_esperado:05.2f}s |   {c_ind:05.2f} ml/h    |    {c_real:05.2f} ml/h       | {desv:.1f} s ({estado})")
+        
+    return trazas
 
 if __name__ == '__main__':
     ejecutar_escenario_04()

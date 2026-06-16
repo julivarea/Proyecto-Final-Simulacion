@@ -72,6 +72,8 @@ def ejecutar_escenario_03():
         estado = "OK" if abs(c_ind - c_real) <= (max(c_ind, 1) * 0.1) else "TRANSICIÓN/DESVÍO"
         if c_ind == 0.0 and c_real == 0.0: estado = "OK"
         print(f" t={t_esperado:05.2f}s |   {c_ind:05.2f} ml/h    |    {c_real:05.2f} ml/h ({estado})")
+        
+    return trazas
 
 if __name__ == '__main__':
     ejecutar_escenario_03()

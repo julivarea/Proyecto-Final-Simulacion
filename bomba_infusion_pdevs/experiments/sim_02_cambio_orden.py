@@ -81,6 +81,8 @@ def ejecutar_escenario_02():
         if c_ind == 0.0 and c_real == 0.0: estado = "OK"
         
         print(f" t={t_esperado:05.2f}s |   {c_ind:05.2f} ml/h    |    {c_real:05.2f} ml/h ({estado})")
+        
+    return trazas
 
 if __name__ == '__main__':
     ejecutar_escenario_02()

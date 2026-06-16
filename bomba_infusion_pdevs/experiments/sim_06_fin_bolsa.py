@@ -90,6 +90,8 @@ def ejecutar_escenario_06():
             estado = "DETENIDA (Pasaron 60s sin nueva bolsa)"
             
         print(f" t={t_esperado:05.2f}s |  {c_real:05.2f} ml/h  | {seg_b:04.1f} s                       | {estado}")
+        
+    return trazas
 
 if __name__ == '__main__':
     ejecutar_escenario_06()

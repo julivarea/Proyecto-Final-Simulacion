@@ -83,6 +83,8 @@ def ejecutar_escenario_05():
                 estado += " (ALARMA MEDIA ACTIVA!)"
                 
         print(f" t={t_esperado:05.2f}s |   {c_ind:05.2f} ml/h    |    {c_real:05.2f} ml/h       | {desv:.1f} s ({estado})")
+        
+    return trazas
 
 if __name__ == '__main__':
     ejecutar_escenario_05()

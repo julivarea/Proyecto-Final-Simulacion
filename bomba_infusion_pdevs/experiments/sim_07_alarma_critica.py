@@ -76,6 +76,8 @@ def ejecutar_escenario_07():
         for t, alarma in emisiones:
             notas = " (Debe repetirse cada 10s si nadie confirma)" if alarma == "CRITICA" else " (Primera advertencia)"
             print(f" t={t:05.2f}s -> Emite Sonido/Luz: {alarma}{notas}")
+            
+    return trazas
 
 if __name__ == '__main__':
     ejecutar_escenario_07()
