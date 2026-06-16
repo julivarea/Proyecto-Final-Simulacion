@@ -157,7 +157,8 @@ class ControladorBomba(AtomicDEVS):
                 q_desvio = [
                     (self.out_alarma_critica, True),
                     (self.out_detener_bomba, True),
-                    (self.out_registrar_evento, TokensRegistro.ALARMA_CRITICA)
+                    (self.out_registrar_evento, TokensRegistro.ALARMA_CRITICA),
+                    (self.out_registrar_evento, TokensRegistro.DETENCION_MEDICA)
                 ]
 
             q_bolsa = []
