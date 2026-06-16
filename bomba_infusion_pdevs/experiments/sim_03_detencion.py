@@ -10,6 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from pypdevs.minimal import Simulator
 from src.models.coupled.bomba_acoplada import BombaAcoplada
 import src.models.atomic.sensor_flujo as sf
+from src.utils.monitor import SimulationMonitor
 
 def ejecutar_escenario_03():
     # Configuración Determinística del Entorno
@@ -39,25 +40,8 @@ def ejecutar_escenario_03():
     
     modelo.g_om.intTransition = types.MethodType(intTransition_modificada, modelo.g_om)
 
-    # EXTRACTOR DE TRAZAS DINÁMICO
-    modelo.controlador.state["historial_caudal_obj"] = [(0.0, 0.0)]
-    modelo.sensor.state["historial_caudal_real"] = [(0.0, 0.0)]
-
-    ctrl_ext_orig = modelo.controlador.extTransition
-    def ctrl_ext_mod(self, inputs):
-        res = ctrl_ext_orig(inputs)
-        if self.in_orden_medica in inputs:
-            tiempo_actual = self.time_last[0] + self.elapsed
-            self.state["historial_caudal_obj"].append((tiempo_actual, self.state["caudal_obj"]))
-        return res
-    modelo.controlador.extTransition = types.MethodType(ctrl_ext_mod, modelo.controlador)
-
-    sensor_int_orig = modelo.sensor.intTransition
-    def sensor_int_mod(self):
-        tiempo_actual = self.time_last[0] + self.state["sigma"]
-        self.state["historial_caudal_real"].append((tiempo_actual, self.state["caudal_real_ml_h"]))
-        return sensor_int_orig()
-    modelo.sensor.intTransition = types.MethodType(sensor_int_mod, modelo.sensor)
+    # Inyectamos el monitor limpio
+    monitor = SimulationMonitor(modelo)
 
     # Configuración del Simulador
     sim = Simulator(modelo)
@@ -68,18 +52,26 @@ def ejecutar_escenario_03():
     print("Simulación finalizada.\n")
 
     # Extracción de Resultados
-    print("--- Registro de Eventos Lógicos (Auditoría) ---")
-    historial = modelo.registrador.state["historial"]
-    if not historial:
-        print("No se registraron eventos.")
-    else:
-        for registro in historial:
-            print(f"Tiempo: {registro['tiempo']:05.2f}s | Evento: {registro['evento']}")
+    trazas = monitor.get_trazas()
+    
+    print("--- Eventos Lógicos (Auditoría) ---")
+    historial = trazas["eventos_logicos"]
+    for registro in historial:
+        print(f"Tiempo: {registro['tiempo']:05.2f}s | Evento: {registro['evento']}")
 
-    print("\n--- Muestra de Traza Física para Gráficos ---")
-    print("Últimas 5 lecturas del caudal en la tubería del paciente:")
-    for t, val in modelo.sensor.state["historial_caudal_real"][-5:]:
-        print(f"  t={t:05.2f}s -> {val:.2f} ml/h")
+    print("\n--- Momentos Clave de la Simulación ---")
+    print("Objetivo: Iniciar a 50 ml/h, y a los 20s apagar la bomba (orden 0 ml/h).")
+    print("Tiempo | Caudal Indicado | Caudal Real Sensado")
+    
+    # 2.0s orden, 4.0s (luego de confirmación), 19.0s antes del paro, 20.0s orden de paro, 22.0s después del paro, 34.0s final
+    momentos_clave = [2.0, 4.0, 19.0, 20.0, 22.0, 34.0]
+    for t_esperado in momentos_clave:
+        c_ind = next((val for t, val in reversed(trazas["caudal_indicado"]) if t <= t_esperado), 0.0)
+        c_real = next((val for t, val in reversed(trazas["caudal_real"]) if t <= t_esperado), 0.0)
+        
+        estado = "OK" if abs(c_ind - c_real) <= (max(c_ind, 1) * 0.1) else "TRANSICIÓN/DESVÍO"
+        if c_ind == 0.0 and c_real == 0.0: estado = "OK"
+        print(f" t={t_esperado:05.2f}s |   {c_ind:05.2f} ml/h    |    {c_real:05.2f} ml/h ({estado})")
 
 if __name__ == '__main__':
     ejecutar_escenario_03()

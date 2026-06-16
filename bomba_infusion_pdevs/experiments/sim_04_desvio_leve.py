@@ -12,14 +12,14 @@ from src.models.coupled.bomba_acoplada import BombaAcoplada
 import src.models.atomic.sensor_flujo as sf
 from src.utils.monitor import SimulationMonitor
 
-def ejecutar_escenario_05():
+def ejecutar_escenario_04():
     # Configuración Determinística
     random.seed(42)
     sf.PORCENTAJE_RUIDO_SENSOR = 0.02 
 
-    modelo = BombaAcoplada(name="Bomba_Esc_05_Desvio_Mayor")
+    modelo = BombaAcoplada(name="Bomba_Esc_04_Desvio_Leve")
 
-    # G_om emite 50.0 ml/h en t=2.0s
+    # G_om emite 50.0 ml/h en t=2.0s y se apaga
     modelo.g_om.state["caudalObjetivo"] = 50.0
     modelo.g_om.state["sigma"] = 2.0
     def intTransition_fija(self):
@@ -30,30 +30,33 @@ def ejecutar_escenario_05():
     # Inyectamos el monitor limpio para extraer trazas automáticamente
     monitor = SimulationMonitor(modelo)
 
-    # Inyección de Falla Sostenida en el Sensor (8 segundos de duración)
+    # Inyección de Falla en el Sensor (Mantenemos esto porque define el escenario)
+    # Sobrescribimos la salida para simular una perturbación física
     sensor_out_orig = modelo.sensor.outputFnc
     def sensor_out_mod(self):
         tiempo_actual = self.time_last[0] + self.state["sigma"]
-        # Falla: el caudal medido sube a 65.0 ml/h (30% de desvío) por 8 segundos
-        if 20.0 <= tiempo_actual <= 28.5:
-            return {self.out_caudal_medido: [65.0]}
+        # Falla: el caudal medido sube a 60.0 ml/h entre los segs 20 y 23.5
+        if 20.0 <= tiempo_actual <= 23.5:
+            return {self.out_caudal_medido: [60.0]}
         return sensor_out_orig()
     modelo.sensor.outputFnc = types.MethodType(sensor_out_mod, modelo.sensor)
 
+    # Interceptamos transición interna para que el sensor asimile la falla internamente también (para gráficas)
     sensor_int_orig = modelo.sensor.intTransition
     def sensor_int_mod(self):
         tiempo_actual = self.time_last[0] + self.state["sigma"]
-        res = sensor_int_orig()
-        if 20.0 <= tiempo_actual <= 28.5:
-            monitor.trazas_caudal_real[-1] = (tiempo_actual, 65.0)
+        res = sensor_int_orig() # original, llama al monitor inyectado también
+        if 20.0 <= tiempo_actual <= 23.5:
+            # Sobrescribimos la traza del monitor con el valor con falla
+            monitor.trazas_caudal_real[-1] = (tiempo_actual, 60.0)
         return res
     modelo.sensor.intTransition = types.MethodType(sensor_int_mod, modelo.sensor)
 
     # Configuración del Simulador
     sim = Simulator(modelo)
-    sim.setTerminationTime(35.0) 
+    sim.setTerminationTime(30.0) 
     
-    print("Iniciando simulación: Escenario 5 (Desvío mayor a 5s -> Alarma Media)...")
+    print("Iniciando simulación: Escenario 4 (Desvío leve tolerado)...")
     sim.simulate()
     print("Simulación finalizada.\n")
 
@@ -66,23 +69,17 @@ def ejecutar_escenario_05():
         print(f"Tiempo: {registro['tiempo']:05.2f}s | Evento: {registro['evento']}")
 
     print("\n--- Momentos Clave de la Simulación ---")
-    print("Objetivo: Falla severa. A los 20s ocurre un desvío mayor al 10% que dura más de 5s.")
-    print("Verificación: A los 5s de falla sostenida debe emitirse ALARMA_MEDIA.")
+    print("Objetivo: Tolerancia a fallas leves. A los 20s ocurre un desvío mayor al 10% que dura 3.5s (menor al límite de 5s).")
+    print("Verificación: El contador de desvío debe subir pero NO se debe emitir ALARMA_MEDIA.")
     print("Tiempo | Caudal Indicado | Caudal Real Sensado | Segundos de Desvío Acumulado")
     
-    momentos_clave = [19.0, 20.0, 21.0, 24.0, 25.0, 26.0, 29.0, 30.0]
+    momentos_clave = [19.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0]
     for t_esperado in momentos_clave:
         c_ind = next((val for t, val in reversed(trazas["caudal_indicado"]) if t <= t_esperado), 0.0)
         c_real = next((val for t, val in reversed(trazas["caudal_real"]) if t <= t_esperado), 0.0)
         desv = next((val for t, val in reversed(trazas["desvio"]) if t <= t_esperado), 0.0)
-        
-        estado = "OK"
-        if 20.0 <= t_esperado <= 28.5:
-            estado = "FALLA INYECTADA"
-            if desv >= 5.0:
-                estado += " (ALARMA MEDIA ACTIVA!)"
-                
+        estado = "FALLA INYECTADA" if 20.0 <= t_esperado <= 23.5 else "OK"
         print(f" t={t_esperado:05.2f}s |   {c_ind:05.2f} ml/h    |    {c_real:05.2f} ml/h       | {desv:.1f} s ({estado})")
 
 if __name__ == '__main__':
-    ejecutar_escenario_05()
+    ejecutar_escenario_04()

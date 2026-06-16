@@ -10,6 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from pypdevs.minimal import Simulator
 from src.models.coupled.bomba_acoplada import BombaAcoplada
 import src.models.atomic.sensor_flujo as sf
+from src.utils.monitor import SimulationMonitor
 
 def ejecutar_escenario_06():
     # Configuración Determinística
@@ -54,26 +55,8 @@ def ejecutar_escenario_06():
         return self.state
     modelo.g_ce.extTransition = types.MethodType(gce_ext, modelo.g_ce)
 
-    # EXTRACTOR DE TRAZAS DINÁMICO
-    modelo.controlador.state["historial_bolsa"] = []
-    modelo.sensor.state["historial_caudal_real"] = [(0.0, 0.0)]
-
-    ctrl_ext_orig = modelo.controlador.extTransition
-    def ctrl_ext_mod(self, inputs):
-        res = ctrl_ext_orig(inputs)
-        # Extraemos el cronómetro interno de la bolsa cada vez que el sensor empuja un dato
-        if self.in_caudal_medido in inputs:
-            tiempo_actual = self.time_last[0] + self.elapsed
-            self.state["historial_bolsa"].append((tiempo_actual, self.state["seg_fin_bolsa"]))
-        return res
-    modelo.controlador.extTransition = types.MethodType(ctrl_ext_mod, modelo.controlador)
-
-    sensor_int_orig = modelo.sensor.intTransition
-    def sensor_int_mod(self):
-        tiempo_actual = self.time_last[0] + self.state["sigma"]
-        self.state["historial_caudal_real"].append((tiempo_actual, self.state["caudal_real_ml_h"]))
-        return sensor_int_orig()
-    modelo.sensor.intTransition = types.MethodType(sensor_int_mod, modelo.sensor)
+    # Inyectamos el monitor limpio para extraer trazas automáticamente
+    monitor = SimulationMonitor(modelo)
 
     # Configuración del Simulador
     sim = Simulator(modelo)
@@ -84,22 +67,29 @@ def ejecutar_escenario_06():
     print("Simulación finalizada.\n")
 
     # Extracción de Resultados
-    print("--- Registro de Eventos Lógicos (Auditoría) ---")
-    historial = modelo.registrador.state["historial"]
-    if not historial:
-        print("No se registraron eventos.")
-    else:
-        for registro in historial:
-            print(f"Tiempo: {registro['tiempo']:05.2f}s | Evento: {registro['evento']}")
+    trazas = monitor.get_trazas()
 
-    print("\n--- Dinámica de Fin de Bolsa (Caudal y Cronómetro) ---")
-    print("Tiempo | Caudal Sensado | Segundos de Bolsa Acumulados")
-    caudales = {round(t): val for t, val in modelo.sensor.state["historial_caudal_real"]}
-    for t, seg_bolsa in modelo.controlador.state["historial_bolsa"]:
-        # Mostramos los instantes clave: cuando llega la alerta y cuando se detiene
-        if (19.5 <= t <= 21.5) or (78.5 <= t <= 81.5):
-            c_real = caudales.get(round(t), 50.0)
-            print(f" t={t:05.2f}s |    {c_real:.2f} ml/h  | {seg_bolsa:.1f} s")
+    print("--- Eventos Lógicos (Auditoría) ---")
+    historial = trazas["eventos_logicos"]
+    for registro in historial:
+        print(f"Tiempo: {registro['tiempo']:05.2f}s | Evento: {registro['evento']}")
+
+    print("\n--- Momentos Clave de la Simulación ---")
+    print("Objetivo: El sensor detecta fin de bolsa a los 20s. Debe emitir ALARMA_BAJA y dar 60s antes de detener la bomba.")
+    print("Tiempo | Caudal Real | Segundos desde Fin de Bolsa | Estado esperado")
+    
+    momentos_clave = [19.0, 20.0, 21.0, 79.0, 80.0, 81.0]
+    for t_esperado in momentos_clave:
+        c_real = next((val for t, val in reversed(trazas["caudal_real"]) if t <= t_esperado), 0.0)
+        seg_b = next((val for t, val in reversed(trazas["fin_bolsa"]) if t <= t_esperado), 0.0)
+        
+        estado = "OK (Bolsa llena)"
+        if 20.0 <= t_esperado < 80.0:
+            estado = "ALARMA BAJA (Esperando confirmación o fin de gracia)"
+        elif t_esperado >= 80.0:
+            estado = "DETENIDA (Pasaron 60s sin nueva bolsa)"
+            
+        print(f" t={t_esperado:05.2f}s |  {c_real:05.2f} ml/h  | {seg_b:04.1f} s                       | {estado}")
 
 if __name__ == '__main__':
     ejecutar_escenario_06()

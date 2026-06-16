@@ -10,6 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from pypdevs.minimal import Simulator
 from src.models.coupled.bomba_acoplada import BombaAcoplada
 import src.models.atomic.sensor_flujo as sf
+from src.utils.monitor import SimulationMonitor
 
 def ejecutar_escenario_07():
     # Configuración Determinística
@@ -42,18 +43,10 @@ def ejecutar_escenario_07():
         return sensor_out_orig()
     modelo.sensor.outputFnc = types.MethodType(sensor_out_mod, modelo.sensor)
 
-    # EXTRACTOR DE TRAZAS DINÁMICO (Para M_a)
-    modelo.alarmas.state["historial_emisiones"] = []
-    
-    # Interceptamos el Módulo de Alarmas para ver cuándo chilla
-    ma_out_orig = modelo.alarmas.outputFnc
-    def ma_out_mod(self):
-        res = ma_out_orig()
-        if self.out_alarma in res:
-            tiempo_actual = self.time_last[0] + self.state["sigma"]
-            self.state["historial_emisiones"].append((tiempo_actual, res[self.out_alarma][0]))
-        return res
-    modelo.alarmas.outputFnc = types.MethodType(ma_out_mod, modelo.alarmas)
+    modelo.sensor.outputFnc = types.MethodType(sensor_out_mod, modelo.sensor)
+
+    # Inyectamos el monitor limpio para extraer trazas (incluidas las de alarma)
+    monitor = SimulationMonitor(modelo)
 
     # Configuración del Simulador
     sim = Simulator(modelo)
@@ -64,18 +57,25 @@ def ejecutar_escenario_07():
     print("Simulación finalizada.\n")
 
     # Extracción de Resultados
-    print("--- Registro de Eventos Lógicos (Auditoría) ---")
-    historial = modelo.registrador.state["historial"]
-    if not historial:
-        print("No se registraron eventos.")
-    else:
-        for registro in historial:
-            print(f"Tiempo: {registro['tiempo']:05.2f}s | Evento: {registro['evento']}")
+    trazas = monitor.get_trazas()
 
-    print("\n--- Dinámica del Módulo de Alarmas ---")
+    print("--- Eventos Lógicos (Auditoría) ---")
+    historial = trazas["eventos_logicos"]
+    for registro in historial:
+        print(f"Tiempo: {registro['tiempo']:05.2f}s | Evento: {registro['evento']}")
+
+    print("\n--- Momentos Clave de la Simulación ---")
+    print("Objetivo: Ocurre una falla sostenida. Tras 5s emite ALARMA_MEDIA. Si en 5s no se confirma, pasa a ALARMA_CRITICA.")
+    print("Como el enfermero está silenciado, la ALARMA_CRITICA no se confirma y debe repetirse cada 10s para molestar.")
     print("Historial de emisiones físicas hacia el entorno hospitalario:")
-    for t, alarma in modelo.alarmas.state["historial_emisiones"]:
-        print(f" t={t:05.2f}s -> Emite Sonido/Luz: {alarma}")
+    
+    emisiones = trazas["emisiones_alarma"]
+    if not emisiones:
+        print(" No hubo emisiones de alarma.")
+    else:
+        for t, alarma in emisiones:
+            notas = " (Debe repetirse cada 10s si nadie confirma)" if alarma == "CRITICA" else " (Primera advertencia)"
+            print(f" t={t:05.2f}s -> Emite Sonido/Luz: {alarma}{notas}")
 
 if __name__ == '__main__':
     ejecutar_escenario_07()
