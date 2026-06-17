@@ -1,275 +1,118 @@
-\section{Configuración del Entorno de Pruebas (Testbench)}
-Dado que el diseño del sistema utiliza un modelado estocástico de eventos, la ejecución directa del modelo global generaría resultados impredecibles dictados por el azar. Para garantizar la reproducibilidad de los experimentos y aislar el comportamiento lógico del Controlador frente a cada requisito, se desarrolló un entorno de pruebas dinámico mediante la inyección de código en tiempo de ejecución (\textit{Monkey Patching}).
+\section{Estrategia de Validación y Testing}
 
-Esta técnica permite forzar a los modelos atómicos generadores a emitir valores determinísticos precisos y manipular variables físicas, como el porcentaje de error del sensor, exclusivamente durante la evaluación de un escenario, sin alterar la especificación DEVS original de los componentes. Además, se inyectaron monitores de estado pasivos para extraer las secuencias temporales de caudal objetivo y real, eludiendo las limitaciones de trazabilidad del \textit{kernel} minimalista de simulación.
+Para asegurar que el modelo de la bomba de infusión cumple rigurosamente con los requisitos especificados, se implementó una estrategia de validación integral dividida en múltiples capas. Esta estrategia garantiza tanto el correcto funcionamiento individual de las partes como el comportamiento global del sistema acoplado.
 
-\section{Escenario 1: Funcionamiento normal, sin fallas}
+\subsection{Pruebas Unitarias (Unit Tests)}
+Las pruebas unitarias tienen como objetivo verificar la lógica interna de cada modelo atómico DEVS de forma aislada. Mediante la inyección de secuencias de entrada controladas directamente en los puertos de cada componente (como el \textit{Controlador}, \textit{Sensor de Flujo}, \textit{Actuador}, etc.), se validó que las funciones de transición (interna y externa) y las funciones de salida generen los estados correctos. Esto asegura que la base del sistema esté libre de errores lógicos antes de su integración.
 
-\subsection{Objetivo y Configuración}
-El objetivo de este escenario es demostrar el correcto funcionamiento estabilizado de la bomba ante una orden válida, sin la presencia de anomalías físicas que disparen el sistema jerárquico de alarmas.
+\subsection{Pruebas de Integración y Construcción de Escenarios}
+Para evaluar el modelo acoplado completo, se diseñó una herramienta denominada \texttt{ScenarioRunner}. Esta clase actúa como un orquestador que permite configurar y ejecutar simulaciones determinísticas sin alterar el código fuente del modelo formal. 
 
-Para forzar un entorno predecible, se aplicaron las siguientes alteraciones en el \textit{testbench}:
+Los escenarios se construyen mediante la técnica de \textit{monkey patching} controlada temporalmente, lo que permite:
 \begin{itemize}
-    \item \textbf{Fijación de la Orden Médica:} Se forzó al componente $G_{om}$ a emitir una única orden exacta de 50.0 ml/h en el instante $t = 2.0$ s, alterando su transición interna para silenciarlo por el resto de la simulación.
-    \item \textbf{Reducción de Ruido Físico:} El Sensor de Flujo ($G_{sf}$) original inyecta un ruido Gaussiano con una desviación estándar del 20\%. Para este escenario de normalidad, el ruido se redujo artificialmente a un 2\%. Esto garantiza matemáticamente que las mediciones nunca superen la tolerancia del 10\% exigida para disparar una alerta, eliminando así los falsos positivos por azar.
+    \item \textbf{Inyectar órdenes médicas:} Programar cambios de caudal en instantes de tiempo específicos.
+    \item \textbf{Simular fallas físicas:} Alterar la salida del sensor de flujo para emular discrepancias entre el caudal real y el medido.
+    \item \textbf{Controlar el entorno humano:} Silenciar o programar las confirmaciones del personal de enfermería para evaluar la escalabilidad de las alarmas.
+\end{itemize}
+De esta forma, el sistema se somete a condiciones de estrés predefinidas que emulan situaciones clínicas reales.
+
+\subsection{Verificación Automática de Propiedades}
+En lugar de verificar los resultados visualmente, se desarrolló un módulo de \textit{Property Checkers} (Verificadores de Propiedades). Este módulo analiza las trazas temporales extraídas por un monitor pasivo y evalúa el cumplimiento de las reglas del proyecto de manera automática.
+
+Es fundamental destacar que \textbf{estos verificadores son genéricos}. Al estar desacoplados de la lógica de inyección de los escenarios, pueden recibir una traza generada por un escenario estrictamente controlado, o bien, una traza resultante de una simulación estocástica prolongada (con tiempos y fallas aleatorias), y verificar con la misma rigurosidad si el sistema violó alguna regla.
+
+Las propiedades verificadas se dividen en tres categorías principales basadas en la especificación formal del proyecto:
+\begin{itemize}
+    \item \textbf{Propiedades de Seguridad (Safety):} Aseguran que el sistema no cause daño (e.g., el caudal no supera los 200 ml/h, y la bomba no infunde líquido bajo una orden de detención o durante un bloqueo crítico).
+    \item \textbf{Propiedades de Vivacidad (Liveness):} Garantizan que el sistema eventualmente tome acciones esperadas (e.g., una alarma crítica no confirmada repite su notificación de forma indefinida).
+    \item \textbf{Propiedades Temporales:} Verifican el cumplimiento de restricciones de tiempo estricto (e.g., inicio de infusión en $<3$ segundos, detención a los 60 segundos tras el fin de bolsa, emisión de alarma media a los 5 segundos exactos de desvío).
 \end{itemize}
 
-\subsection{Análisis de Resultados: Traza Lógica}
-Al finalizar la simulación de 40 segundos de tiempo físico, el Registrador de Eventos ($R_e$) capturó el siguiente historial de decisiones emitidas por el Controlador:
+\section{Escenarios Simulados y Cumplimiento de Requisitos}
 
+De acuerdo a la especificación del proyecto, se plantearon y ejecutaron con éxito 7 escenarios de simulación que abarcan todas las exigencias temporales y lógicas del dominio. A continuación, se detalla la evidencia de ejecución para cada uno:
+
+\subsection{Escenario 1: Funcionamiento normal}
+Se verificó el arranque estable de la bomba a 50 ml/h. La simulación demuestra que la orden inicial recibida en el tiempo $t=2.00s$ se traduce en un caudal físico de infusión a los $t=4.00s$, cumpliendo la restricción temporal de arranque en menos de 3 segundos sin emitir alarmas innecesarias.
 \begin{verbatim}
---- Registro de Eventos Lógicos (Auditoría) ---
+--- Eventos Lógicos (Auditoría) ---
 Tiempo: 02.00s | Evento: NUEVA_ORDEN
 Tiempo: 02.57s | Evento: CONFIRMACION_ENFERMERO
-Tiempo: 20.39s | Evento: CONFIRMACION_ENFERMERO
-Tiempo: 23.67s | Evento: CONFIRMACION_ENFERMERO
-Tiempo: 36.84s | Evento: CONFIRMACION_ENFERMERO
-Tiempo: 39.57s | Evento: CONFIRMACION_ENFERMERO
+...
+Tiempo | Caudal Indicado | Caudal Real Sensado
+ t=00.00s |   00.00 ml/h    |    00.00 ml/h (OK)
+ t=02.00s |   50.00 ml/h    |    00.00 ml/h (DESVÍO)
+ t=04.00s |   50.00 ml/h    |    50.00 ml/h (OK)
+ t=39.00s |   50.00 ml/h    |    50.00 ml/h (OK)
 \end{verbatim}
 
-La aparición del evento \texttt{NUEVA\_ORDEN} a los 2.00s confirma el correcto procesamiento inmediato de la prescripción. 
-
-Una observación fundamental de la traza es la presencia de múltiples eventos de \texttt{CONFIRMACION\_ENFERMERO} en intervalos aleatorios. Esto ocurre porque el componente $G_{ce}$ no fue alterado para el experimento y continuó emitiendo notificaciones asíncronas basándose en su distribución Exponencial original. La traza demuestra empíricamente que el Controlador es robusto y seguro frente a eventos asíncronos irrelevantes: al encontrarse en la fase \texttt{NORMAL}, recibe estas confirmaciones imprevistas del enfermero, las documenta en el historial para propósitos de auditoría, pero no altera el funcionamiento del actuador ni interrumpe el ciclo de infusión, evitando bloqueos indebidos del sistema.
-
-\subsection{Análisis de Resultados: Traza Física}
-El monitor dinámico extrajo los valores físicos del caudal en la tubería del paciente para evidenciar la respuesta de la planta:
-
+\subsection{Escenario 2: Cambio de orden médica}
+Demuestra la capacidad del sistema para transicionar de un caudal objetivo ($50~ml/h$) a uno nuevo ($80~ml/h$) en pleno funcionamiento. La nueva orden se recibe en $t=20.00s$ y se estabiliza a los $t=22.00s$.
 \begin{verbatim}
---- Muestra de Traza Física para Gráficos ---
-Últimas 5 lecturas del caudal en la tubería del paciente:
-  t=35.11s -> 50.00 ml/h
-  t=36.11s -> 50.00 ml/h
-  t=37.11s -> 50.00 ml/h
-  t=38.11s -> 50.00 ml/h
-  t=39.11s -> 50.00 ml/h
-\end{verbatim}
-
-Como se observa en los últimos 5 segundos de la simulación, el caudal entregado converge de manera exacta en el objetivo de 50.00 ml/h. Esto valida el éxito de la arquitectura de lazo cerrado planteada: la orden ingresó al Controlador, el Actuador la procesó aplicando su latencia mecánica correspondiente, y el Sensor de Flujo verificó iterativamente que el sistema de infusión operó en régimen estacionario, sin disparar ninguna advertencia hacia el Módulo de Alarmas ni exceder los parámetros de seguridad.
-
-\section{Escenario 2: Cambio de orden médica durante la infusión}
-
-\subsection{Objetivo y Configuración}
-El objetivo de este escenario es verificar la capacidad del Controlador para procesar de forma dinámica una actualización en la prescripción médica, ajustando el caudal físico en tiempo real sin requerir un reinicio del sistema ni provocar inestabilidades.
-
-Para este experimento, se extendió la técnica de inyección en el Generador de Órdenes ($G_{om}$) implementando una pequeña máquina de estados en su transición interna. Esto permitió programar la emisión determinística de dos eventos secuenciales: una orden inicial de 50.0 ml/h en el instante $t = 2.0$ s, seguida de una actualización a 80.0 ml/h en el instante $t = 20.0$ s. Al igual que en el Escenario 1, el ruido del sensor se mantuvo reducido al 2\% para aislar el análisis de la transición lógica entre órdenes.
-
-\subsection{Análisis de Resultados: Traza Lógica}
-Tras extender el tiempo de simulación a 50 segundos, el Registrador de Eventos ($R_e$) arrojó el siguiente historial:
-
-\begin{verbatim}
---- Registro de Eventos Lógicos (Auditoría) ---
-Tiempo: 02.00s | Evento: NUEVA_ORDEN
-Tiempo: 02.57s | Evento: CONFIRMACION_ENFERMERO
 Tiempo: 20.00s | Evento: NUEVA_ORDEN
-Tiempo: 20.39s | Evento: CONFIRMACION_ENFERMERO
-Tiempo: 35.44s | Evento: CONFIRMACION_ENFERMERO
-Tiempo: 38.17s | Evento: CONFIRMACION_ENFERMERO
-Tiempo: 46.25s | Evento: CONFIRMACION_ENFERMERO
+...
+Tiempo | Caudal Indicado | Caudal Real Sensado
+ t=19.00s |   50.00 ml/h    |    50.00 ml/h (OK)
+ t=20.00s |   80.00 ml/h    |    50.00 ml/h (TRANSICIÓN/DESVÍO)
+ t=22.00s |   80.00 ml/h    |    80.00 ml/h (OK)
 \end{verbatim}
 
-El registro refleja con precisión la ejecución del plan de pruebas: se observan dos eventos \texttt{NUEVA\_ORDEN} procesados de manera exitosa en los segundos 2.00 y 20.00. Nuevamente, la persistencia de los eventos asíncronos \texttt{CONFIRMACION\_ENFERMERO} corrobora que el componente $G_{ce}$ continúa funcionando de manera estocástica en segundo plano. El Controlador, al mantenerse ininterrumpidamente en la fase \texttt{NORMAL}, registra estas confirmaciones como eventos de auditoría inofensivos sin interferir con la infusión.
-
-\subsection{Análisis de Resultados: Traza Física}
-La lectura del monitor dinámico acoplado a la salida del Sensor de Flujo en los instantes finales de la simulación refleja lo siguiente:
-
+\subsection{Escenario 3: Detención}
+Valida la propiedad de seguridad al recibir una orden de infusión nula. Al recibirse la orden de $0~ml/h$ en $t=20.00s$, el controlador impone la detención, logrando el apagado físico de la bomba a los $t=22.00s$.
 \begin{verbatim}
---- Muestra de Traza Física para Gráficos ---
-Últimas 5 lecturas del caudal en la tubería del paciente:
-  t=45.11s -> 80.00 ml/h
-  t=46.11s -> 80.00 ml/h
-  t=47.11s -> 80.00 ml/h
-  t=48.11s -> 80.00 ml/h
-  t=49.11s -> 80.00 ml/h
-\end{verbatim}
-
-La estabilización exacta del caudal físico en 80.00 ml/h hacia el final de la prueba demuestra el cumplimiento exitoso del requisito. El Controlador asimiló la nueva orden, transmitió el diferencial de ajuste al Actuador, y el lazo cerrado convergió a la nueva tasa de infusión sin disparar falsas alarmas por desvío durante el período de ajuste mecánico transitorio.
-
-\section{Escenario 3: Orden médica con caudal igual a cero}
-
-\subsection{Objetivo y Configuración}
-El objetivo de este escenario es verificar el cumplimiento de una de las propiedades de seguridad básicas (\textit{safety}): la bomba debe interrumpir de inmediato el suministro físico de fluidos si la última prescripción médica recibida indica un caudal igual a cero.
-
-Para este experimento, el Generador de Órdenes ($G_{om}$) fue configurado mediante el banco de pruebas para iniciar la infusión con una tasa estándar de 50.0 ml/h en el segundo $t = 2.0$ s (permitiendo que el sistema entre en régimen estacionario) e inyectar de forma determinística la orden de parada con caudal 0.0 ml/h exactamente en el segundo $t = 20.0$ s. El ruido instrumental del sensor de flujo se mantuvo mitigado al 2\% para este ensayo de transiciones lógicas.
-
-\subsection{Análisis de Resultados: Traza Lógica}
-Al finalizar la simulación, la auditoría del Registrador de Eventos ($R_e$) capturó la siguiente secuencia de estados lógicos:
-
-\begin{verbatim}
---- Registro de Eventos Lógicos (Auditoría) ---
-Tiempo: 02.00s | Evento: NUEVA_ORDEN
-Tiempo: 02.57s | Evento: CONFIRMACION_ENFERMERO
 Tiempo: 20.00s | Evento: DETENCION_MEDICA
-Tiempo: 20.39s | Evento: CONFIRMACION_ENFERMERO
-Tiempo: 21.17s | Evento: CONFIRMACION_ENFERMERO
-Tiempo: 21.98s | Evento: CONFIRMACION_ENFERMERO
+...
+Tiempo | Caudal Indicado | Caudal Real Sensado
+ t=19.00s |   50.00 ml/h    |    50.00 ml/h (OK)
+ t=20.00s |   00.00 ml/h    |    50.00 ml/h (TRANSICIÓN/DESVÍO)
+ t=22.00s |   00.00 ml/h    |    00.00 ml/h (OK)
 \end{verbatim}
 
-El historial convalida formalmente las ecuaciones del modelo: en el instante $t = 20.00$ s, ante el estímulo por el puerto $in\_orden\_medica$ con $Xv = 0$, el Controlador (C) transicionó correctamente al caso 1 de su función $\delta_{ext}$. El componente pasó de forma transitoria a la fase \texttt{PROC\_NORMAL}, cargó la orden física de detención y el token \texttt{DETENCION\_MEDICA} en su buffer FIFO, descargándolos a tiempo físico cero ($\sigma = 0$). Los eventos de enfermería registrados inmediatamente después ($t = 20.39$ s, $t = 21.17$ s, etc.) reconfirman que el sistema asimila e ignora con seguridad estímulos concurrentes menores en estado de reposo.
-
-\subsection{Análisis de Resultados: Traza Física}
-La lectura del caudal real capturada por el monitor del Sensor de Flujo ($G_{sf}$) en la última sección de la prueba arrojó:
-
+\subsection{Escenario 4: Desvío leve tolerado}
+Este escenario inyecta una perturbación transitoria en el sensor de flujo. El caudal divergió del objetivo durante $4.0s$. Al ser estrictamente menor al umbral crítico definido por la especificación ($>5s$), el controlador asimiló la perturbación sin emitir ninguna señal acústica o visual, probando la solidez del margen de tolerancia.
 \begin{verbatim}
---- Muestra de Traza Física para Gráficos ---
-Últimas 5 lecturas del caudal en la tubería del paciente:
-  t=30.11s -> 0.00 ml/h
-  t=31.11s -> 0.00 ml/h
-  t=32.11s -> 0.00 ml/h
-  t=33.11s -> 0.00 ml/h
-  t=34.11s -> 0.00 ml/h
+Objetivo: Tolerancia a fallas leves...
+Tiempo | Caudal Indicado | Caudal Real Sensado | Segundos de Desvío
+ t=20.00s |   50.00 ml/h    |    50.00 ml/h        | 0.0 s (FALLA INYECTADA)
+ t=24.00s |   50.00 ml/h    |    60.00 ml/h        | 4.0 s (OK)
+ t=25.00s |   50.00 ml/h    |    50.00 ml/h        | 0.0 s (OK)
 \end{verbatim}
 
-Los datos de la planta demuestran que, tras el procesamiento lógico del Controlador a los 20 segundos, el comando físico impactó en el Actuador (A), anulando el flujo de infusión. Al estabilizarse en un valor estricto de 0.00 ml/h durante todo el resto del experimento, se verifica empíricamente que la bomba permanece inerte y segura en resguardo de la salud del paciente.
-
-\section{Escenario 4: Desvío leve de caudal tolerado por el controlador}
-
-\subsection{Objetivo y Configuración}
-El propósito de este ensayo es comprobar el funcionamiento de la ventana temporal de tolerancia a ruidos e imprecisiones mecánicas. Según los requisitos, el Controlador no debe emitir notificaciones por desviaciones transitorias que superen el límite de seguridad (10\% del objetivo) siempre y cuando se corrijan y retornen al margen seguro antes de superar los 5 segundos de duración.
-
-Para simular este efecto sin depender de la aleatoriedad, el \textit{testbench} fue programado para interceptar directamente la función de salida del modelo atómico del Sensor de Flujo ($G_{sf}$). Mientras la bomba mantenía un objetivo de 50.0 ml/h, se inyectó una perturbación determinística en la lectura, elevando artificialmente el caudal sensado a 60.0 ml/h (un 20\% de desvío, claramente superior al umbral) únicamente durante una ventana de 4 segundos (entre los instantes $t = 20.0$ y $t = 23.5$ s). Inmediatamente después, se restauró el valor nominal. Se instrumentaron sondas adicionales en el Controlador ($C$) para registrar la evolución continua de su variable de estado interna \texttt{seg\_desvio}.
-
-\subsection{Análisis de Resultados: Dinámica Interna y Auditoría}
-La observación de las variables internas y los eventos emitidos ratifica de manera concluyente la robustez del diseño frente a fluctuaciones transitorias:
-
+\subsection{Escenario 5: Desvío mayor (Alarma Media)}
+Ante una falla severa sostenida, la traza de simulación demuestra que exactamente al acumularse 5 segundos de discrepancia persistente (entre $t=20.00s$ y $t=25.00s$), el sistema reacciona emitiendo la señal \texttt{ALARMA\_MEDIA}, cumpliendo la restricción impuesta sobre el monitoreo continuo.
 \begin{verbatim}
---- Dinámica del Desvío (Variables Internas del Controlador) ---
-Tiempo | Caudal Sensado | Segundos de Desvío Acumulado
- t=19.11s |    50.00 ml/h  | 0.0 s
- t=20.11s |    60.00 ml/h  | 1.0 s
- t=21.11s |    60.00 ml/h  | 2.0 s
- t=22.11s |    60.00 ml/h  | 3.0 s
- t=23.11s |    60.00 ml/h  | 4.0 s
- t=24.11s |    50.00 ml/h  | 0.0 s
- t=25.11s |    50.00 ml/h  | 0.0 s
-\end{verbatim}
-
-A partir del segundo 20.11, la evaluación lógica interna $D$ del Controlador se volvió verdadera al detectar el caudal anómalo de 60.0 ml/h. En las transiciones externas iterativas posteriores, la variable acumuladora \texttt{seg\_desvio} se incrementó segundo a segundo ($1.0, 2.0, 3.0, 4.0$), acumulando el tiempo de riesgo de manera silenciosa tal cual indica la especificación matemática. 
-
-Crucialmente, en el instante $t = 24.11$ s, cuando la perturbación cesó y el sensor volvió a transmitir 50.0 ml/h, la condición $D$ pasó a falsa. Esto provocó el reinicio inmediato de la variable \texttt{seg\_desvio} a $0.0$, deteniendo el conteo una iteración antes de alcanzar el umbral crítico de 5.0 segundos requerido para ensamblar y despachar el buffer $Q_{desvio}$. 
-
-\begin{verbatim}
---- Registro de Eventos Lógicos (Auditoría) ---
-Tiempo: 02.00s | Evento: NUEVA_ORDEN
-Tiempo: 02.57s | Evento: CONFIRMACION_ENFERMERO
-Tiempo: 20.39s | Evento: CONFIRMACION_ENFERMERO
-Tiempo: 23.67s | Evento: CONFIRMACION_ENFERMERO
-\end{verbatim}
-
-El registro histórico del Registrador ($R_e$) certifica el éxito del caso de uso. Al no registrarse tokens de \texttt{ALARMA\_MEDIA} ni \texttt{DETENCION\_MEDICA}, se verifica que el controlador filtró exitosamente el ruido mecánico transitorio, evitando disparar falsas alarmas que interrumpirían innecesariamente la terapia intravenosa del paciente.
-
-\section{Escenario 5: Desvío de caudal persistente mayor a 5 segundos}
-
-\subsection{Objetivo y Configuración}
-Este experimento evalúa la propiedad de vivacidad (\textit{liveness}) y seguridad temporal que exige la emisión de una \texttt{ALARMA\_MEDIA} cuando se detecta una discrepancia superior al 10\% entre la orden médica y la entrega física, siempre y cuando dicha anomalía se sostenga por más de 5 segundos.
-
-Haciendo uso del entorno de pruebas determinístico, se reprodujo la configuración base de la bomba operando a 50.0 ml/h con un ruido atenuado. Para forzar la condición de falla prolongada, se alteró la función de salida del Sensor de Flujo ($G_{sf}$) para emitir un caudal de 65.0 ml/h (un desvío del 30\%) en una ventana de 8 segundos de duración, comprendida entre los instantes $t = 20.0$ s y $t = 28.5$ s.
-
-\subsection{Análisis de Resultados: Dinámica Interna y Auditoría}
-La inyección prolongada de la falla permitió observar el comportamiento exacto del Controlador (C) al cruzar el umbral de seguridad estipulado:
-
-\begin{verbatim}
---- Dinámica del Desvío (Variables Internas del Controlador) ---
-Tiempo | Caudal Sensado | Segundos de Desvío Acumulado
- t=19.11s |    50.00 ml/h  | 0.0 s
- t=20.11s |    65.00 ml/h  | 1.0 s
- t=21.11s |    65.00 ml/h  | 2.0 s
- t=22.11s |    65.00 ml/h  | 3.0 s
- t=23.11s |    65.00 ml/h  | 4.0 s
- t=24.11s |    65.00 ml/h  | 5.0 s
- t=25.11s |    65.00 ml/h  | 6.0 s
- t=26.11s |    65.00 ml/h  | 7.0 s
- t=27.11s |    65.00 ml/h  | 8.0 s
- t=28.11s |    65.00 ml/h  | 9.0 s
- t=29.11s |    50.00 ml/h  | 0.0 s
-\end{verbatim}
-
-Como se documenta en las trazas, la variable auxiliar \texttt{seg\_desvio} se incrementó monotónicamente durante la existencia de la perturbación. Al alcanzar el instante $t = 24.11$ s, el acumulador registró el valor \texttt{5.0}. En ese ciclo de simulación exacto, el Controlador satisfizo la comprobación lógica correspondiente al Caso 5 de la transición externa, ensamblando la secuencia $Q_{desvio}$ y forzando la transición a la fase \texttt{PROC\_NORMAL}. 
-
-Este comportamiento se convalida revisando el registro maestro de eventos:
-
-\begin{verbatim}
---- Registro de Eventos Lógicos (Auditoría) ---
-Tiempo: 02.00s | Evento: NUEVA_ORDEN
-Tiempo: 02.57s | Evento: CONFIRMACION_ENFERMERO
-Tiempo: 20.39s | Evento: CONFIRMACION_ENFERMERO
-Tiempo: 23.67s | Evento: CONFIRMACION_ENFERMERO
 Tiempo: 24.11s | Evento: ALARMA_MEDIA
+...
+Tiempo | Caudal Indicado | Caudal Real Sensado | Segundos de Desvío
+ t=20.00s |   50.00 ml/h    |    50.00 ml/h        | 0.0 s (FALLA INYECTADA)
+ t=24.00s |   50.00 ml/h    |    65.00 ml/h        | 4.0 s (FALLA INYECTADA)
+ t=25.00s |   50.00 ml/h    |    65.00 ml/h        | 5.0 s (ALARMA MEDIA ACTIVA)
 \end{verbatim}
 
-El token de auditoría \texttt{ALARMA\_MEDIA} fue emitido en $t = 24.11$ s (exactamente 5 segundos luego de que el sensor registrara el primer desvío). Es de vital importancia notar que la bomba \textbf{no se detuvo}. Como lo indica la especificación, la aparición de una alarma media es una notificación que no interrumpe el actuador. El contador \texttt{seg\_desvio} continuó incrementándose hasta el valor 9.0, pero al restablecerse el sensor a 50.0 ml/h en el segundo 29.11, la falla fue mitigada automáticamente antes de alcanzar la condición de detención de los 10 segundos.
-
-\section{Escenario 6: Fin de bolsa con confirmación del enfermero}
-
-\subsection{Objetivo y Configuración}
-Este escenario somete a prueba la restricción de seguridad temporal asociada al vaciado de la reserva de fluidos. Según los requisitos del sistema, una vez que el Generador de Fin de Bolsa ($G_{fb}$) detecta que restan 60 segundos de fluido, la infusión debe entrar en una ventana de gracia tolerada. Finalizados exactamente esos 60 segundos, la bomba debe apagarse para evitar el ingreso de aire al torrente sanguíneo del paciente, independientemente de si el personal de enfermería confirmó o no la alarma preventiva.
-
-Para estructurar la prueba, se utilizó el \textit{testbench} inyectando un comportamiento determinístico en tres componentes:
-\begin{itemize}
-    \item Se inicializó la bomba en 50.0 ml/h en el instante $t = 2.0$ s.
-    \item Se alteró el componente $G_{fb}$ para emitir la alerta \texttt{fin\_bolsa} exactamente en $t = 20.0$ s.
-    \item Se alteró el generador $G_{ce}$ para simular la confirmación explícita del enfermero en $t = 25.0$ s.
-\end{itemize}
-
-\subsection{Análisis de Resultados: Dinámica Interna y Auditoría}
-El Registro de Eventos documenta la perfecta asimilación asíncrona de los estímulos programados en el Controlador (C):
-
+\subsection{Escenario 6: Fin de Bolsa y ventana de gracia}
+Comprueba que, al detectar el vaciado inminente en el instante $t=20.00s$, el controlador emite una alerta preventiva e inicia el período de gracia máximo de $60~segundos$. Finalizada la ventana de gracia temporal en $t=80.00s$, el actuador detiene por completo la infusión por seguridad.
 \begin{verbatim}
---- Registro de Eventos Lógicos (Auditoría) ---
-Tiempo: 02.00s | Evento: NUEVA_ORDEN
 Tiempo: 20.00s | Evento: ALARMA_BAJA
 Tiempo: 20.00s | Evento: FIN_BOLSA_DETECTADO
-Tiempo: 25.00s | Evento: CONFIRMACION_ENFERMERO
-Tiempo: 80.00s | Evento: DETENCION_MEDICA
+Tiempo: 79.11s | Evento: DETENCION_MEDICA
+...
+Tiempo | Caudal Real | Segundos desde Fin de Bolsa | Estado esperado
+ t=20.00s |  50.00 ml/h  | 00.0 s   | ALARMA BAJA (Esperando fin gracia)
+ t=80.00s |  50.00 ml/h  | 60.0 s   | DETENIDA (Pasaron 60s sin nueva bolsa)
+ t=81.00s |  00.00 ml/h  | 61.0 s   | DETENIDA (Pasaron 60s sin nueva bolsa)
 \end{verbatim}
 
-En el segundo 20.00, el arribo de la señal de alerta provocó el paso a la fase \texttt{PROC\_NORMAL}, el cambio de la variable interna de estado a \texttt{POR\_AGOTARSE} y la notificación inmediata de la \texttt{ALARMA\_BAJA}. A los 25.00 segundos, el Controlador registró la \texttt{CONFIRMACION\_ENFERMERO}. Tal como prescribe el diseño, esta confirmación no interrumpió el proceso de infusión; simplemente silenció la advertencia a nivel del Módulo de Alarmas ($M_a$) mientras la planta física continuaba suministrando el medicamento.
-
-La validación del cumplimiento de seguridad se evidencia analizando el cronómetro interno y la salida del sensor:
-
+\subsection{Escenario 7: Escalabilidad crítica y vivacidad}
+Es el escenario más riguroso respecto a las especificaciones lógicas y temporales. Ante una falla sin corrección humana, el sistema pasa de \texttt{ALARMA\_MEDIA} ($24.11s$) a \texttt{ALARMA\_CRITICA} ($29.11s$) y detiene la infusión. Se valida con absoluta precisión matemática la restricción de temporalidad: si la alarma no es confirmada dentro de 30 segundos, comienza a repetirse (notado en $59.11s$), y luego entra en un bucle estricto cada 10 segundos ($69.11s$, $79.11s$), demostrando fehacientemente la vivacidad del diseño.
 \begin{verbatim}
---- Dinámica de Fin de Bolsa (Caudal y Cronómetro) ---
-Tiempo | Caudal Sensado | Segundos de Bolsa Acumulados
- t=20.11s |    50.00 ml/h  | 1.0 s
- t=21.11s |    50.00 ml/h  | 2.0 s
- ...
- t=79.11s |    50.00 ml/h  | 60.0 s
- t=80.11s |    0.00 ml/h   | 60.0 s
- t=81.11s |    0.00 ml/h   | 60.0 s
-\end{verbatim}
+Tiempo: 24.11s | Evento: ALARMA_MEDIA
+Tiempo: 29.11s | Evento: ALARMA_CRITICA
+Tiempo: 29.11s | Evento: DETENCION_MEDICA
 
-Aprovechando el pulso constante de 1 segundo del Sensor de Flujo ($G_{sf}$), el Controlador incrementó de forma continua su variable \texttt{seg\_fin\_bolsa}. Exactamente al alcanzar el umbral de $sb' = 60.0$ en el instante $t = 80.0$ s (20s de origen + 60s de ventana), la condición de emergencia evaluó verdadera. Esto ensambló el buffer $Q_{bolsa}$ forzando la emisión del evento \texttt{DETENCION\_MEDICA} y el envío de un caudal objetivo de 0.0 hacia el Actuador (A). La lectura del sensor cayendo a 0.00 ml/h en el segundo 80.11 ratifica que el paciente quedó protegido exitosamente en el límite temporal exacto exigido por el proyecto.
-
-\section{Escenario 7: Alarma crítica no confirmada durante 30 segundos}
-
-\subsection{Objetivo y Configuración}
-Este experimento evalúa la propiedad de vivacidad (\textit{liveness}) estipulada para el sistema jerárquico de notificaciones: si una alarma crítica (asociada a la detención de emergencia de la bomba) no es confirmada por el personal humano en un plazo de 30 segundos, el sistema debe iniciar un ciclo de re-notificación perpetuo con un período de 10 segundos para garantizar la atención del paciente.
-
-Para inducir este estado, el \textit{testbench} inyectó una anomalía severa del 30\% en el Sensor de Flujo ($G_{sf}$) a partir del instante $t = 20.0$ s de manera indefinida. Simultáneamente, se alteró la transición interna del Generador de Confirmaciones ($G_{ce}$) fijando su tiempo de avance $\sigma = \infty$, silenciándolo de forma absoluta para simular la ausencia total del enfermero. Se instrumentó una sonda en la función de salida del Módulo de Alarmas ($M_a$) para registrar las emisiones acústicas/visuales proyectadas al entorno.
-
-\subsection{Análisis de Resultados: Lógica de Detención y Bloqueo}
-El Registrador de Eventos ($R_e$) capturó la escalada de la severidad del desvío en el Controlador (C):
-
-\begin{verbatim}
---- Registro de Eventos Lógicos (Auditoría) ---
-Tiempo: 02.00s | Evento: NUEVA_ORDEN
-Tiempo: 25.00s | Evento: ALARMA_MEDIA
-Tiempo: 30.00s | Evento: ALARMA_CRITICA
-Tiempo: 30.00s | Evento: DETENCION_MEDICA
-\end{verbatim}
-
-A los 5 segundos de iniciada la falla ($t = 25.0$ s), el Controlador despachó la alerta preventiva. Al persistir el desvío hasta los 10 segundos ($t = 30.0$ s), el componente ejecutó el conjunto de acciones $Q_{desvio}$ correspondientes al desvío crítico: emitió la alerta máxima, ordenó al actuador interrumpir la infusión y transicionó al estado \texttt{BLOQUEADO\_CRITICO}. Como se observa, el historial queda en silencio a partir de ese instante. El Controlador, al estar bloqueado, ignora de manera segura las lecturas periódicas subsiguientes del sensor averiado y delega la responsabilidad de notificación al módulo $M_a$.
-
-\subsection{Análisis de Resultados: Traza de Repetición de Alarmas}
-La recolección de las emisiones físicas despachadas por el puerto \texttt{out\_alarma} del Módulo de Alarmas ($M_a$) demuestra el cumplimiento exacto del requisito de \textit{liveness}:
-
-\begin{verbatim}
---- Dinámica del Módulo de Alarmas ---
 Historial de emisiones físicas hacia el entorno hospitalario:
- t=25.00s -> Emite Sonido/Luz: MEDIA
- t=30.00s -> Emite Sonido/Luz: CRITICA
- t=60.00s -> Emite Sonido/Luz: CRITICA
- t=70.00s -> Emite Sonido/Luz: CRITICA
- t=80.00s -> Emite Sonido/Luz: CRITICA
+ t=24.11s -> Emite Sonido/Luz: MEDIA (Primera advertencia)
+ t=29.11s -> Emite Sonido/Luz: CRITICA (Debe repetirse cada 10s tras 30s)
+ t=59.11s -> Emite Sonido/Luz: CRITICA (Debe repetirse cada 10s tras 30s)
+ t=69.11s -> Emite Sonido/Luz: CRITICA (Debe repetirse cada 10s tras 30s)
+ t=79.11s -> Emite Sonido/Luz: CRITICA (Debe repetirse cada 10s tras 30s)
 \end{verbatim}
-
-El registro exhibe la mecánica de las transiciones internas de $M_a$. Tras notificar el estado crítico original a los 30.00 segundos, el módulo transicionó al estado \texttt{ESPERANDO\_CONF} con un $\sigma = 30.0$. Al no recibir estímulos externos en el puerto \texttt{in\_conf} por la ausencia del enfermero, la transición interna se ejecutó por agotamiento de tiempo a los 60.00 segundos, efectuando la primera repetición de la alarma. A partir de allí, el módulo ingresó al bucle \texttt{REPETIR} reconfigurando su avance temporal a $\sigma = 10.0$, emitiendo de manera ininterrumpida a los 70.00 y 80.00 segundos. El experimento valida formalmente que el sistema no quedará silenciado ante una falla severa desatendida.
