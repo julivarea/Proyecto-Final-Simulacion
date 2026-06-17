@@ -1,8 +1,18 @@
+import sys
+import os
 import types
-from pypdevs.minimal import Simulator
+import pypdevs
+
+sys.path.append(os.path.dirname(pypdevs.__file__))
+
+from pypdevs.minimal import Simulator, AtomicDEVS
 from src.models.coupled.bomba_acoplada import BombaAcoplada
 from src.utils.monitor import SimulationMonitor
 import src.models.atomic.sensor_flujo as sf
+
+# Evita que heapq falle (TypeError) cuando hay componentes con el mismo timeAdvance
+if not hasattr(AtomicDEVS, "__lt__"):
+    AtomicDEVS.__lt__ = lambda self, other: id(self) < id(other)
 
 class ScenarioRunner:
     """Runner genérico y reutilizable para escenarios de simulación."""
