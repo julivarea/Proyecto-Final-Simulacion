@@ -2,6 +2,13 @@ import pytest
 import sys
 import os
 import random
+import pypdevs
+
+sys.path.append(os.path.dirname(pypdevs.__file__))
+
+from pypdevs.minimal import AtomicDEVS
+if not hasattr(AtomicDEVS, "__lt__"):
+    AtomicDEVS.__lt__ = lambda self, other: id(self) < id(other)
 
 # Aseguramos que los imports desde src funcionen
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
