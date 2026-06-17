@@ -35,14 +35,6 @@ def test_registrador():
 
     historial = modelo_reg.registrador.state["historial"]
 
-    print(f"\n{'='*60}")
-    print("TEST: REGISTRADOR DE EVENTOS (40s)")
-    print(f"{'='*60}")
-    print(f"  Eventos inyectados manualmente. Esperados en t=5.0s, t=20.0s y t=30.0s.")
-    print(f"  Cantidad de eventos registrados: {len(historial)}")
-    print(f"\n  Historial recuperado luego de la simulación:")
-    for entrada in historial:
-        print(f"    - Tiempo: {entrada['tiempo']:>5.2f}s | Evento: {entrada['evento']}")
 
     assert len(historial) == 3, "El historial debe contener 3 eventos (ignorando el DUMMY fuera del tiempo de simulación)"
     

@@ -24,14 +24,7 @@ def test_generador_ordenes():
     sim.simulate()
 
     eventos = modelo.rec.state["eventos"]
-    print(f"\n{'='*60}")
-    print("TEST: GENERADOR DE ÓRDENES MÉDICAS (3600s)")
-    print(f"{'='*60}")
-    print(f"  Órdenes emitidas: {len(eventos)}")
-    for e in eventos[:3]:
-        print(f"    - Tiempo: {e['tiempo']:>7.2f}s | Caudal: {e['valor']:>6.2f} ml/h")
-    if len(eventos) > 3: print("    ... (truncado)")
-    
+
     assert len(eventos) > 0, "El generador de órdenes debería emitir eventos en 3600 segundos"
     for e in eventos:
         assert 0.0 <= e['valor'] <= 600.0, "El caudal generado debe estar entre 0.0 y 600.0 ml/h"

@@ -24,13 +24,6 @@ def test_generador_confirmaciones():
     sim.simulate()
 
     eventos = modelo.rec.state["eventos"]
-    print(f"\n{'='*60}")
-    print("TEST: GENERADOR DE CONFIRMACIONES (360s)")
-    print(f"{'='*60}")
-    print(f"  Confirmaciones emitidas: {len(eventos)}")
-    for e in eventos[:3]:
-        print(f"    - Tiempo: {e['tiempo']:>7.2f}s | Valor: {e['valor']}")
-    if len(eventos) > 3: print("    ... (truncado)")
 
     assert len(eventos) > 0, "El generador de confirmaciones debería emitir eventos en 360 segundos"
     for e in eventos:

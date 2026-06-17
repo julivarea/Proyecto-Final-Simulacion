@@ -49,17 +49,6 @@ def test_modulo_alarmas():
     sim.simulate()
 
     eventos = modelo.rec_alarmas.state["eventos"]
-    print(f"\n{'='*60}")
-    print("TEST: MÓDULO DE ALARMAS (90s)")
-    print(f"{'='*60}")
-    print("  Escenario:")
-    print("    t= 5.0s -> Ingresa Alarma BAJA")
-    print("    t=10.0s -> Ingresa Alarma MEDIA")
-    print("    t=20.0s -> Ingresa Alarma CRITICA")
-    print("    t=75.0s -> Ingresa CONFIRMACIÓN ENFERMERO")
-    print("\n  Notificaciones emitidas por el Módulo (por la bocina/pantalla):")
-    for e in eventos:
-        print(f"    - Tiempo: {e['tiempo']:>7.2f}s | Nivel de Alarma Emitido: {e['valor']}")
 
     tiempos = [e['tiempo'] for e in eventos]
     valores = [e['valor'] for e in eventos]
