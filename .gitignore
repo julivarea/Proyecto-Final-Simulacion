@@ -23,3 +23,16 @@
 # Python
 __pycache__/
 *.pyc
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Artefactos y datos
+data/graficos/
