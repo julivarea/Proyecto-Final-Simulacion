@@ -137,3 +137,55 @@ Implementado en \texttt{test\_stochastic\_stress\_noise.py}. Se evaluó un escen
 
 \subsection{Negligencia Médica: Enfermero Ausente}
 Implementado en \texttt{test\_stochastic\_absent\_nurse.py}. Representa el "peor caso" de operación clínica. Las alarmas y desviaciones ocurren de forma aleatoria natural, pero se configuró al entorno para ignorar perpetuamente los pedidos de confirmación. Esta simulación corroboró de forma definitiva la propiedad de \textit{Vivacidad}: el sistema logra alcanzar su estado seguro (\textit{fail-safe}) bloqueando la bomba, y la re-notificación de las alertas entra en un bucle teóricamente infinito (cada 10 segundos) hasta que se reciba asistencia humana real.
+
+\section{Resultados de Simulación y Análisis Visual}
+
+Con el fin de evaluar el comportamiento del sistema a lo largo de un período prolongado y bajo condiciones de incertidumbre, se ejecutaron simulaciones estocásticas de larga duración. De estas trazas se extrajeron métricas y representaciones gráficas que permiten verificar empíricamente el cumplimiento de los requerimientos de diseño, respondiendo a la exigencia de visualizar el estado del controlador.
+
+\subsection{Evolución del Caudal y Tolerancia}
+El requerimiento principal de la bomba es mantener el caudal real lo más cercano posible al caudal indicado por la orden médica. En la Figura 4.1 se observa la evolución de ambas señales.
+
+\begin{figure}[hbt!]
+    \centering
+    \includegraphics[width=0.9\textwidth]{images/plot_caudales.png}
+    \caption{Evolución temporal del caudal objetivo versus el caudal sensado por el dispositivo. La franja sombreada representa el margen de tolerancia operativa del $\pm 10\%$. Las líneas verticales verdes indican el ingreso de nuevas órdenes médicas.}
+    \label{fig:caudales}
+\end{figure}
+
+Como se aprecia en la gráfica, el caudal real persigue el objetivo de forma estable. Los picos que exceden la franja sombreada corresponden a perturbaciones físicas inyectadas (ruido del sensor), las cuales el sistema debe procesar para determinar si constituyen una falla crítica o una anomalía pasajera.
+
+\subsection{Análisis Temporal de Desviaciones}
+Para evitar la fatiga por alarmas (\textit{alarm fatigue}), el sistema no reacciona instantáneamente ante cualquier pico de ruido, sino que integra el tiempo de desvío sostenido. La Figura 4.2 demuestra gráficamente este mecanismo.
+
+\begin{figure}[hbt!]
+    \centering
+    \includegraphics[width=0.9\textwidth]{images/plot_desvios.png}
+    \caption{Acumulación de segundos de desviación sostenida respecto a los umbrales lógicos del sistema. La caída abrupta a cero indica que el caudal retornó a la normalidad.}
+    \label{fig:desvios}
+\end{figure}
+
+Se verifica visualmente el cumplimiento estricto de las reglas temporales: el integrador acumula segundos únicamente cuando el caudal sale de la banda del $10\%$. Al interceptar el umbral de 5 segundos, se dispara lógicamente el nivel de alerta correspondiente.
+
+\subsection{Registro Histórico de Alarmas}
+Las emisiones destinadas a notificar al personal de salud fueron registradas y categorizadas a lo largo del experimento estocástico. La Figura 4.3 expone la frecuencia y la distribución de estos eventos.
+
+\begin{figure}[hbt!]
+    \centering
+    \includegraphics[width=1\textwidth]{images/plot_alarmas.png}
+    \caption{A la izquierda: Línea de tiempo de las emisiones de advertencia hacia el entorno. A la derecha: Histograma con la frecuencia absoluta según la severidad del evento.}
+    \label{fig:alarmas}
+\end{figure}
+
+La distribución demuestra que el diseño prioriza operar de forma preventiva (abundancia de alarmas BAJA o MEDIA), reservando el estado CRÍTICO exclusivamente para escenarios donde la falla es inminente o el personal no responde a los llamados de atención.
+
+\subsection{Transiciones Lógicas de Estado}
+A partir del análisis combinado de las métricas anteriores, se abstrajo el comportamiento de la bomba en tres macro-estados operativos. La Figura 4.4 ilustra este ciclo de vida.
+
+\begin{figure}[hbt!]
+    \centering
+    \includegraphics[width=1\textwidth]{images/plot_estados.png}
+    \caption{Diagrama de transiciones de estado de la bomba de infusión. Permite identificar de un vistazo las ventanas de detención, operación segura y los períodos de anomalía.}
+    \label{fig:estados}
+\end{figure}
+
+Esta gráfica final satisface el requerimiento de observar el estado general de la máquina a lo largo del tiempo. Facilita la interpretación clínica al aislar el ruido puro del sensor y enfocarse categóricamente en la condición de seguridad que experimenta el paciente en cada instante $t$.
