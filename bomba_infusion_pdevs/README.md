@@ -10,7 +10,7 @@ source venv/bin/activate
 ## Instalación de dependencias estándar
 
 ```bash
-pip install numpy matplotlib pandas
+pip install numpy matplotlib pandas pytest
 ```
 
 ## Instalación Manual de PythonPDEVS
@@ -43,12 +43,22 @@ pip freeze > requirements.txt
 
 ## Ejecución de las Pruebas
 
-Las pruebas de cada componente atómico se encuentran en la carpeta `tests/`. Para ejecutar la suite completa de pruebas, sitúate en la raíz del proyecto (`bomba_infusion_pdevs/`) y ejecuta:
+Las pruebas del proyecto han sido migradas al framework `pytest`. Para ejecutar la suite de pruebas, asegúrate de tener el entorno virtual activado y sitúate en la raíz del proyecto (`bomba_infusion_pdevs/`).
 
 ```bash
-# Asegúrate de tener el entorno virtual activado
-source ../venv/bin/activate
+# 1. Activar el entorno virtual (si no lo has hecho aún)
+source venv/bin/activate
 
-# Ejecutar todos los tests de manera individual o la suite completa
-python -m tests.run_all
+# 2. Ejecutar absolutamente TODO (Unitarios + Escenarios)
+python3 -m pytest tests/
+
+# Opcional: Ejecutar SOLO los tests unitarios (componentes aislados)
+python3 -m pytest tests/unit/
+
+# Opcional: Ejecutar SOLO los escenarios controlados (integración formal)
+python3 -m pytest tests/scenarios/controlled/
 ```
+
+**Tips útiles:**
+- Agrega `-s` para habilitar el output de `print()` interno durante las simulaciones: `python3 -m pytest -s tests/`
+- Agrega `-v` para obtener un detalle exhaustivo (verbose) de cada caso de prueba: `python3 -m pytest -v tests/`
