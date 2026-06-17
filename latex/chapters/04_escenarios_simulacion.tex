@@ -8,7 +8,7 @@ Las pruebas unitarias tienen como objetivo verificar la lógica interna de cada 
 \subsection{Pruebas de Integración y Construcción de Escenarios}
 Para evaluar el modelo acoplado completo, se diseñó una herramienta denominada \texttt{ScenarioRunner}. Esta clase actúa como un orquestador que permite configurar y ejecutar simulaciones determinísticas sin alterar el código fuente del modelo formal. 
 
-Los escenarios se construyen mediante la técnica de \textit{monkey patching} controlada temporalmente, lo que permite:
+Los escenarios controlados se construyen mediante la técnica de \textit{monkey patching} controlada temporalmente, lo que permite:
 \begin{itemize}
     \item \textbf{Inyectar órdenes médicas:} Programar cambios de caudal en instantes de tiempo específicos.
     \item \textbf{Simular fallas físicas:} Alterar la salida del sensor de flujo para emular discrepancias entre el caudal real y el medido.
@@ -116,3 +116,24 @@ Historial de emisiones físicas hacia el entorno hospitalario:
  t=69.11s -> Emite Sonido/Luz: CRITICA (Debe repetirse cada 10s tras 30s)
  t=79.11s -> Emite Sonido/Luz: CRITICA (Debe repetirse cada 10s tras 30s)
 \end{verbatim}
+
+\section{Análisis Estocástico y Reducción de Riesgos}
+
+Si bien los escenarios controlados demuestran que la lógica del controlador es correcta frente a inyecciones puntuales de eventos, un Sistema de Tiempo Real (STR) en el dominio médico debe soportar la aleatoriedad intrínseca del mundo físico. Para cumplimentar con la exigencia del proyecto de proponer métodos para reducir riesgos, se diseñó un conjunto de \textbf{Pruebas Estocásticas Puras}. 
+
+En estos escenarios no existe intervención algorítmica (\textit{monkey-patching}); el modelo opera gobernado únicamente por las distribuciones estadísticas de sus componentes (ruidos de sensor Normales, latencias Uniformes y ocurrencia de eventos Exponenciales). Todos estos tests fueron validados con los \textit{Property Checkers} descritos anteriormente.
+
+\subsection{Operación Estocástica Normal}
+Implementado en \texttt{test\_stochastic\_normal\_operation.py}. Se simuló el sistema dejándolo fluir de forma natural durante 10 minutos (600 segundos). El objetivo fue confirmar que las fluctuaciones menores del $20\%$ de ruido gaussiano en el sensor o los pequeños retrasos mecánicos no desencadenen falsos positivos en las alarmas críticas, validando que el sistema absorbe el caos sin romper las reglas de \textit{Safety} ni \textit{Liveness}.
+
+\subsection{Prueba de Estabilidad Extendida (Long Run)}
+Implementado en \texttt{test\_stochastic\_long\_run.py}. El sistema DEVS fue simulado a lo largo de 30 minutos (1800 segundos) de tiempo virtual. Esta prueba garantiza que, tras múltiples ciclos de vaciado y recarga de bolsa, y múltiples órdenes médicas aleatorias, el sistema no presenta fugas de memoria (e.g., colas infinitas) ni entra en bucles infinitos de tiempo cero (\textit{livelocks}). Todas las propiedades se mantuvieron invictas a lo largo de toda la línea de tiempo.
+
+\subsection{Robustez de Semilla Aleatoria (Multiple Seeds)}
+Implementado en \texttt{test\_stochastic\_multiple\_seeds.py}. A fin de evitar el sesgo de confirmación por utilizar un generador pseudoaleatorio amigable, se parametrizó la simulación estocástica para ejecutarse en bucle bajo 10 semillas aleatorias distintas (\textit{seeds}). Las aserciones pasaron satisfactoriamente para todas las combinaciones de eventos, probando que el sistema es determinísticamente seguro frente a entradas no determinísticas.
+
+\subsection{Estrés Físico: Ruido Extremo del Sensor}
+Implementado en \texttt{test\_stochastic\_stress\_noise.py}. Se evaluó un escenario de degradación de \textit{hardware} elevando la tasa de error gaussiano del sensor al $45\%$ (muy por encima del $20\%$ nominal). Esta prueba demostró que el controlador es resiliente: detectó las anomalías físicas sostenidas y escaló las alarmas correspondientes hacia el estado de Bloqueo Crítico, deteniendo la bomba y asegurando la integridad del paciente frente a equipamiento defectuoso.
+
+\subsection{Negligencia Médica: Enfermero Ausente}
+Implementado en \texttt{test\_stochastic\_absent\_nurse.py}. Representa el "peor caso" de operación clínica. Las alarmas y desviaciones ocurren de forma aleatoria natural, pero se configuró al entorno para ignorar perpetuamente los pedidos de confirmación. Esta simulación corroboró de forma definitiva la propiedad de \textit{Vivacidad}: el sistema logra alcanzar su estado seguro (\textit{fail-safe}) bloqueando la bomba, y la re-notificación de las alertas entra en un bucle teóricamente infinito (cada 10 segundos) hasta que se reciba asistencia humana real.
