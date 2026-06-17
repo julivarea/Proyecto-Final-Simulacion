@@ -38,13 +38,6 @@ Proyecto Final Simulación/
 ├── docs/                            ← Documentación y referencias
 │   ├── Proyecto_Bomba_Infusion_Promocionar.pdf
 │   └── Tesis_HollmannDiego_137813910453.pdf
-│
-└── devs_atomicos/                   ← Especificaciones de los modelos atómicos DEVS
-    ├── sensorFlujo.md
-    ├── controladorBomba.md
-    ├── moduloAlarmas.md
-    ├── actuador.md
-    └── generadorOrdenesMedicas.md
 ```
 
 ### `docs/`
@@ -54,19 +47,7 @@ Contiene la documentación de referencia del proyecto:
 - **`Proyecto_Bomba_Infusion_Promocionar.pdf`** — Enunciado y requisitos funcionales del sistema a modelar.
 - **`Tesis_HollmannDiego_137813910453.pdf`** — Tesis de referencia para la formalización CML-DEVS utilizada en el modelo.
 
-### `devs_atomicos/`
 
-Contiene la especificación formal de cada modelo atómico del sistema, siguiendo la notación CML-DEVS. Cada archivo describe el estado, puertos, funciones de transición y salida del componente correspondiente:
-
-| Archivo                       | Componente                  |
-|------------------------------|-----------------------------|
-| `sensorFlujo.md`             | Sensor de flujo             |
-| `controladorBomba.md`        | Controlador de la bomba     |
-| `moduloAlarmas.md`           | Módulo de alarmas           |
-| `actuador.md`                | Actuador                    |
-| `generadorOrdenesMedicas.md` | Generador de órdenes médicas|
-
----
 
 ## Referencias
 
