@@ -55,17 +55,7 @@ class ScenarioRunner:
                 return {self_sensor.out_caudal_medido: [caudal_falso]}
             return sensor_out_orig()
         self.modelo.sensor.outputFnc = types.MethodType(sensor_out_mod, self.modelo.sensor)
-        
-        # Interceptamos transición interna para que las gráficas y el monitor vean la falla
-        sensor_int_orig = self.modelo.sensor.intTransition
-        monitor = self.monitor
-        def sensor_int_mod(self_sensor):
-            t_actual = self_sensor.time_last[0] + self_sensor.state["sigma"]
-            res = sensor_int_orig()
-            if t_inicio <= t_actual <= t_fin:
-                monitor.trazas_caudal_real[-1] = (t_actual, caudal_falso)
-            return res
-        self.modelo.sensor.intTransition = types.MethodType(sensor_int_mod, self.modelo.sensor)
+
         
     def patch_enfermero(self, t_conf: float = None, silenciar: bool = False):
         """Configura el generador de confirmaciones del enfermero."""
@@ -107,6 +97,5 @@ class ScenarioRunner:
         """Ejecuta la simulación y retorna las trazas."""
         sim = Simulator(self.modelo)
         sim.setTerminationTime(self.sim_time)
-        sim.setVerbose(None)
         sim.simulate()
         return self.monitor.get_trazas()

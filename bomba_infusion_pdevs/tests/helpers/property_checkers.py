@@ -52,7 +52,7 @@ def check_safety_bloqueo_critico(trazas) -> CheckResult:
         
     t_primera_critica = alarmas_criticas[0]
     eventos = trazas["eventos_logicos"]
-    conf_posterior = next((evt for evt in eventos if evt["evento"] == "CONFIRMACION_ENFERMERO" and evt["tiempo"] > t_primera_critica), None)
+    conf_posterior = next((evt for evt in eventos if evt["evento"] in ("CONFIRMACION_ENFERMERO", "AJUSTE_CAUDAL") and evt["tiempo"] > t_primera_critica), None)
     
     for t, val in trazas["caudal_real"]:
         if t > (t_primera_critica + 1.0):
@@ -90,7 +90,7 @@ def check_liveness_alarma_critica_repite(trazas) -> CheckResult:
         
     t_primera_critica = alarmas_criticas[0]
     eventos = trazas["eventos_logicos"]
-    conf_posterior = next((evt for evt in eventos if evt["evento"] == "CONFIRMACION_ENFERMERO" and evt["tiempo"] > t_primera_critica), None)
+    conf_posterior = next((evt for evt in eventos if evt["evento"] in ("CONFIRMACION_ENFERMERO", "AJUSTE_CAUDAL") and evt["tiempo"] > t_primera_critica), None)
     
     t_limite = conf_posterior["tiempo"] if conf_posterior else (trazas["caudal_real"][-1][0] if trazas["caudal_real"] else 0.0)
     
