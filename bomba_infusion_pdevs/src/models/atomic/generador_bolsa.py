@@ -11,7 +11,7 @@ class GeneradorFinBolsa(AtomicDEVS):
     Modela el vaciado físico de la bolsa de infusión y emite una alerta 
     unos segundos antes de agotarse. Luego simula un relleno automático.
     """
-    def __init__(self, name="G_fb", capacidad_bolsa_ml=500.0, tiempo_anticipacion_alerta_segs=60.0):
+    def __init__(self, name="G_fb", capacidad_bolsa_ml=30.0, tiempo_anticipacion_alerta_segs=60.0):
         super().__init__(name)
         
         self.capacidad_bolsa_ml = capacidad_bolsa_ml

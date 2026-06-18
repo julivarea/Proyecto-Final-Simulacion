@@ -16,11 +16,11 @@ if not hasattr(AtomicDEVS, "__lt__"):
 
 class ScenarioRunner:
     """Runner genérico y reutilizable para escenarios de simulación."""
-    
-    def __init__(self, seed=42, sim_time=100.0, sensor_noise=0.20, name="Test_Bomba"):
+    def __init__(self, seed=42, sim_time=100.0, sensor_noise=None, name="Test_Bomba"):
         import random
         random.seed(seed)
-        sf.PORCENTAJE_RUIDO_SENSOR = sensor_noise
+        if sensor_noise is not None:
+            sf.PORCENTAJE_RUIDO_SENSOR = sensor_noise
         
         self.modelo = BombaAcoplada(name=name)
         self.sim_time = sim_time
@@ -109,3 +109,45 @@ class ScenarioRunner:
         sim.setTerminationTime(self.sim_time)
         sim.simulate()
         return self.monitor.get_trazas()
+
+    def export_trace_log(self, filepath: str):
+        """Exporta una traza combinada de eventos en formato legible (HH:MM:SS - Evento)."""
+        trazas = self.monitor.get_trazas()
+        eventos_formateados = []
+        import math
+
+        def fmt_time(t_sec):
+            if math.isinf(t_sec) or math.isnan(t_sec):
+                return "INFINITY"
+            h = int(t_sec // 3600)
+            m = int((t_sec % 3600) // 60)
+            s = int(t_sec % 60)
+            return f"{h:02d}:{m:02d}:{s:02d}"
+
+        # 1. Eventos del Registrador
+        for ev in trazas.get("eventos_logicos", []):
+            eventos_formateados.append((ev["tiempo"], f"Registrador: {ev['evento']}"))
+
+        # 2. Fases del Controlador
+        for t, fase in trazas.get("fase_controlador", []):
+            eventos_formateados.append((t, f"Controlador: Cambio a fase '{fase}'"))
+
+        # 3. Alarmas
+        for t, alarma in trazas.get("emisiones_alarma", []):
+            eventos_formateados.append((t, f"Módulo Alarmas: Emisión de '{alarma}'"))
+
+        # 4. Órdenes y caudal
+        for t, caudal in trazas.get("caudal_indicado", []):
+            eventos_formateados.append((t, f"Generador: Nueva orden médica de caudal objetivo {caudal:.2f} ml/h"))
+
+        # Filtrar eventos que ocurren en el infinito (remanentes del simulador) o valores NaN
+        eventos_formateados = [(t, desc) for t, desc in eventos_formateados if not (math.isinf(t) or math.isnan(t))]
+
+        # Ordenar todos los eventos cronológicamente (usando un índice estable en caso de empate)
+        eventos_formateados.sort(key=lambda x: x[0])
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(f"=== Traza de Eventos de Simulación: {self.modelo.name} ===\n")
+            f.write(f"Tiempo Total Simulado: {fmt_time(self.sim_time)} ({self.sim_time} segundos)\n\n")
+            for t, desc in eventos_formateados:
+                f.write(f"[{fmt_time(t)}] (t={t:06.2f}s) - {desc}\n")

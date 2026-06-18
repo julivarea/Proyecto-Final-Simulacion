@@ -12,6 +12,7 @@ class SimulationMonitor:
         # Estructuras para guardar la evolución temporal
         self.trazas_caudal_obj = [(0.0, 0.0)]
         self.trazas_caudal_real = [(0.0, 0.0)]
+        self.trazas_caudal_medido = [(0.0, 0.0)]
         # El controlador suele arrancar en una fase de espera (habría que confirmar su fase inicial, 
         # asumimos 'ESPERANDO_ORDEN' o similar, pero lo capturará en el primer evento)
         self.trazas_fase_controlador = [] 
@@ -31,6 +32,7 @@ class SimulationMonitor:
         ctrl_ext_orig = controlador.extTransition
         ctrl_int_orig = controlador.intTransition
         sensor_int_orig = sensor.intTransition
+        sensor_out_orig = sensor.outputFnc
         alarmas_out_orig = alarmas.outputFnc
         
         monitor_self = self # Referencia local para acceder dentro de las funciones parcheadas
@@ -79,7 +81,16 @@ class SimulationMonitor:
             
             return sensor_int_orig()
 
-        # 4. Monitorear outputFnc del Módulo de Alarmas
+        # 4. Monitorear outputFnc del SensorFlujo
+        def sensor_out_mod(self):
+            res = sensor_out_orig()
+            if self.out_caudal_medido in res:
+                tiempo_actual = self.time_last[0] + self.state["sigma"]
+                caudal_sensado = res[self.out_caudal_medido][0]
+                monitor_self.trazas_caudal_medido.append((tiempo_actual, caudal_sensado))
+            return res
+
+        # 5. Monitorear outputFnc del Módulo de Alarmas
         def alarmas_out_mod(self):
             res = alarmas_out_orig()
             if self.out_alarma in res:
@@ -91,6 +102,7 @@ class SimulationMonitor:
         controlador.extTransition = types.MethodType(ctrl_ext_mod, controlador)
         controlador.intTransition = types.MethodType(ctrl_int_mod, controlador)
         sensor.intTransition = types.MethodType(sensor_int_mod, sensor)
+        sensor.outputFnc = types.MethodType(sensor_out_mod, sensor)
         alarmas.outputFnc = types.MethodType(alarmas_out_mod, alarmas)
         
     def get_trazas(self):
@@ -98,6 +110,7 @@ class SimulationMonitor:
         return {
             "caudal_indicado": self.trazas_caudal_obj,
             "caudal_real": self.trazas_caudal_real,
+            "caudal_medido": self.trazas_caudal_medido,
             "fase_controlador": self.trazas_fase_controlador,
             "desvio": self.trazas_desvio,
             "fin_bolsa": self.trazas_bolsa,

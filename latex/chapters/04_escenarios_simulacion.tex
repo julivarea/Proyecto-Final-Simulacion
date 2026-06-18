@@ -140,19 +140,30 @@ Implementado en \texttt{test\_stochastic\_absent\_nurse.py}. Representa el "peor
 
 \section{Resultados de Simulación y Análisis Visual}
 
-Con el fin de evaluar el comportamiento del sistema a lo largo de un período prolongado y bajo condiciones de incertidumbre, se ejecutaron simulaciones estocásticas de larga duración. De estas trazas se extrajeron métricas y representaciones gráficas que permiten verificar empíricamente el cumplimiento de los requerimientos de diseño, respondiendo a la exigencia de visualizar el estado del controlador.
+Con el fin de evaluar el comportamiento del sistema a lo largo de un período prolongado y bajo condiciones de incertidumbre, se ejecutaron simulaciones estocásticas de larga duración (30 minutos / 1800 segundos). De estas trazas se extrajeron métricas y representaciones gráficas que permiten verificar empíricamente el cumplimiento de los requerimientos de diseño, respondiendo a la exigencia de visualizar el estado del controlador.
 
 \subsection{Evolución del Caudal y Tolerancia}
-El requerimiento principal de la bomba es mantener el caudal real lo más cercano posible al caudal indicado por la orden médica. En la Figura 4.1 se observa la evolución de ambas señales.
+El requerimiento principal de la bomba es mantener el caudal real lo más cercano posible al caudal indicado por la orden médica. En la Figura 4.1 se observa la evolución de las variables asociadas al caudal.
 
 \begin{figure}[hbt!]
     \centering
     \includegraphics[width=0.9\textwidth]{images/plot_caudales.png}
-    \caption{Evolución temporal del caudal objetivo versus el caudal sensado por el dispositivo. La franja sombreada representa el margen de tolerancia operativa del $\pm 10\%$. Las líneas verticales verdes indican el ingreso de nuevas órdenes médicas.}
+    \caption{Evolución temporal del caudal de la bomba. Se compara el caudal objetivo prescrito, el caudal real entregado al paciente y las lecturas ruidosas individuales del sensor. La franja sombreada representa el margen de tolerancia operativa del $\pm 10\%$. Las líneas verticales verdes indican el ingreso de nuevas órdenes médicas.}
     \label{fig:caudales}
 \end{figure}
 
-Como se aprecia en la gráfica, el caudal real persigue el objetivo de forma estable. Los picos que exceden la franja sombreada corresponden a perturbaciones físicas inyectadas (ruido del sensor), las cuales el sistema debe procesar para determinar si constituyen una falla crítica o una anomalía pasajera.
+En este gráfico se distinguen tres elementos fundamentales:
+\begin{itemize}
+    \item \textbf{Caudal Objetivo (Prescripción Médica) - Línea azul:} Representa el caudal objetivo que debe infundirse de acuerdo con la última orden médica válida.
+    \item \textbf{Caudal Real (Entrega Física al Paciente) - Línea roja:} Es el caudal físico real de líquido entregado por el actuador de la bomba. Se observa que persigue fielmente al caudal objetivo con un pequeño retardo mecánico transitorio ($0$ a $0.5$ segundos). Ambas líneas se superponen formando una línea violeta durante la operación normal.
+    \item \textbf{Lecturas del Sensor (Señal con Ruido) - Puntos naranjas:} Representa las muestras discretas de caudal medido que el sensor de flujo envía al controlador cada 1 segundo. Estas muestras incorporan el ruido gaussiano del 20\%, distribuyéndose como una nube de puntos alrededor del caudal real. Es la única información que el controlador posee para evaluar el estado de la infusión.
+\end{itemize}
+
+\textbf{Análisis de Observaciones Clave:}
+\begin{itemize}
+    \item \textbf{Detención por Desvío Crítico (alrededor del segundo 30/100):} Se puede observar cómo la nube de puntos naranjas (lecturas del sensor) se dispersa consistentemente fuera de la franja azul de tolerancia del $\pm 10\%$. Debido a que el desvío se sostiene por 10 segundos continuos, el controlador detecta una falla crítica y detiene preventivamente la bomba. En el gráfico, esto se evidencia cuando la línea roja (caudal real) cae abruptamente a $0~ml/h$, mientras que la línea azul (caudal objetivo prescrito) permanece en su valor original. Esto genera una clara discrepancia visual que representa la parada de seguridad.
+    \item \textbf{Detención por Fin de Bolsa (alrededor del segundo 800 a 1100):} A medida que el líquido es infundido, el volumen de la bolsa decrece hasta agotarse. En la gráfica se aprecia el instante exacto en que la bolsa se queda sin líquido (alrededor del segundo 800-1100 dependiendo de la semilla y los caudales aleatorios previos). Al agotarse el líquido y transcurrir la ventana de gracia de 60 segundos sin confirmación de recarga, la bomba detiene la entrega por seguridad, haciendo que la línea roja caiga a $0~ml/h$ a pesar de que el objetivo de la orden (línea azul) siga activo.
+\end{itemize}
 
 \subsection{Análisis Temporal de Desviaciones}
 Para evitar la fatiga por alarmas (\textit{alarm fatigue}), el sistema no reacciona instantáneamente ante cualquier pico de ruido, sino que integra el tiempo de desvío sostenido. La Figura 4.2 demuestra gráficamente este mecanismo.
@@ -164,7 +175,12 @@ Para evitar la fatiga por alarmas (\textit{alarm fatigue}), el sistema no reacci
     \label{fig:desvios}
 \end{figure}
 
-Se verifica visualmente el cumplimiento estricto de las reglas temporales: el integrador acumula segundos únicamente cuando el caudal sale de la banda del $10\%$. Al interceptar el umbral de 5 segundos, se dispara lógicamente el nivel de alerta correspondiente.
+El gráfico de desviaciones muestra cómo el integrador temporal incrementa su cuenta segundo a segundo únicamente cuando una medición del sensor (punto naranja de la Figura 4.1) cae fuera de la banda del $\pm 10\%$. Si una sola lectura vuelve a ingresar a la zona segura, el contador se reinicia a cero de forma inmediata para evitar falsos positivos.
+
+\textbf{Análisis de Observaciones Clave:}
+\begin{itemize}
+    \item \textbf{Activación de Alarmas:} Alrededor del segundo 30/100, se observa que el acumulador alcanza el umbral de 5 segundos (línea punteada naranja), lo que gatilla la emisión de una \texttt{ALARMA\_MEDIA}. Al persistir la perturbación y alcanzar los 10 segundos (línea punteada roja), se gatilla la detención preventiva y se emite la \texttt{ALARMA\_CRITICA}, momento en el cual la bomba se bloquea y el desvío se congela o retorna a cero tras detenerse la entrega.
+\end{itemize}
 
 \subsection{Registro Histórico de Alarmas}
 Las emisiones destinadas a notificar al personal de salud fueron registradas y categorizadas a lo largo del experimento estocástico. La Figura 4.3 expone la frecuencia y la distribución de estos eventos.
@@ -176,7 +192,12 @@ Las emisiones destinadas a notificar al personal de salud fueron registradas y c
     \label{fig:alarmas}
 \end{figure}
 
-La distribución demuestra que el diseño prioriza operar de forma preventiva (abundancia de alarmas BAJA o MEDIA), reservando el estado CRÍTICO exclusivamente para escenarios donde la falla es inminente o el personal no responde a los llamados de atención.
+El gráfico de alarmas permite correlacionar cronológicamente las alertas emitidas con los eventos del sistema:
+\begin{itemize}
+    \item Las \textbf{Alarmas Medias} ocurren con frecuencia debido al alto ruido del sensor (20\%), que ocasionalmente acumula 5 lecturas consecutivas erróneas fuera de tolerancia.
+    \item La \textbf{Alarma Baja} aparece de forma aislada en el instante en que el generador de bolsa notifica que el volumen de líquido está por agotarse (alrededor del segundo 800-1100).
+    \item Las \textbf{Alarmas Críticas} son eventos de baja frecuencia que indican situaciones donde la bomba se detuvo por completo y requiere intervención inmediata del personal de enfermería para reajustar el flujo.
+\end{itemize}
 
 \subsection{Transiciones Lógicas de Estado}
 A partir del análisis combinado de las métricas anteriores, se abstrajo el comportamiento de la bomba en tres macro-estados operativos. La Figura 4.4 ilustra este ciclo de vida.
@@ -188,4 +209,14 @@ A partir del análisis combinado de las métricas anteriores, se abstrajo el com
     \label{fig:estados}
 \end{figure}
 
-Esta gráfica final satisface el requerimiento de observar el estado general de la máquina a lo largo del tiempo. Facilita la interpretación clínica al aislar el ruido puro del sensor y enfocarse categóricamente en la condición de seguridad que experimenta el paciente en cada instante $t$.
+Esta gráfica final categoriza el estado de la bomba de infusión en tres condiciones lógicas muy claras:
+\begin{itemize}
+    \item \textbf{Normal (Estado 1):} La bomba se encuentra infundiendo líquido activamente y las lecturas medidas por el sensor se encuentran dentro de la banda de tolerancia del $\pm 10\%$. Representa una entrega segura y estable.
+    \item \textbf{Anomalía (Estado 2):} La bomba continúa infundiendo líquido, pero la lectura del sensor de flujo ha caído fuera de la banda del $\pm 10\%$. Este estado es transitorio: si la lectura reingresa a la banda de tolerancia, el sistema retorna a \textit{Normal}; si permanece en anomalía por 10 segundos, escala a una detención de seguridad.
+    \item \textbf{Detenida (Estado 0):} La bomba ha apagado su actuador físico y el caudal real de infusión entregado al paciente es estrictamente $0~ml/h$. Este estado se alcanza cuando se recibe una orden médica de detención voluntaria ($0~ml/h$), o bien por una \textbf{detención preventiva de seguridad} gatillada por el controlador ante un desvío crítico de caudal o al expirar la ventana de gracia del fin de bolsa.
+\end{itemize}
+
+\textbf{Análisis de Observaciones Clave:}
+\begin{itemize}
+    \item Se puede constatar que la bomba oscila constantemente entre los estados \textit{Normal} y \textit{Anomalía} debido al ruido inherente de la medición. Sin embargo, las caídas sostenidas al estado \textit{Detenida} (Estado 0) ocurren únicamente cuando expira la bolsa (segundo 800-1100) o ante una alarma crítica de desvío (segundo 30/100), alineándose perfectamente con las caídas a cero de la línea roja en el gráfico de caudales.
+\end{itemize}

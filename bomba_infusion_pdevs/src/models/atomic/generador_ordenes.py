@@ -10,10 +10,10 @@ class GeneradorOrdenes(AtomicDEVS):
         self.out_caudal_obj = self.addOutPort("out_caudal_obj")
         
         # Estado Inicial (s0)
-        # s0 = (Uniforme(0, 200), Exponencial(1/300.0))
+        # s0 = (Uniforme(0, 200), Exponencial(1/60.0))
         self.state = {
             "caudalObjetivo": uniforme(0, 200),
-            "sigma": exponencial(1/300.0)
+            "sigma": exponencial(1/60.0)
         }
 
     def timeAdvance(self):
@@ -26,9 +26,9 @@ class GeneradorOrdenes(AtomicDEVS):
         return {self.out_caudal_obj: [self.state["caudalObjetivo"]]}
 
     def intTransition(self):
-        # delta_int(caudalObjetivo, sigma) = (Uniforme(0, 200), Exponencial(1/300.0))
+        # delta_int(caudalObjetivo, sigma) = (Uniforme(0, 200), Exponencial(1/60.0))
         self.state["caudalObjetivo"] = uniforme(0, 200)
-        self.state["sigma"] = exponencial(1/300.0)
+        self.state["sigma"] = exponencial(1/60.0)
         
         return self.state
 

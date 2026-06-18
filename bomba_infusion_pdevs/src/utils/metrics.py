@@ -40,16 +40,16 @@ class SimulationMetrics:
         return conteos
 
     def tiempos_confirmacion_enfermero(self) -> list[float]:
-        """Tiempos entre la emisión de una alarma y la confirmación del enfermero."""
+        """Tiempos entre la emisión de una alarma y la primera confirmación del enfermero posterior a ella."""
         tiempos = []
         alarmas = self.trazas.get("emisiones_alarma", [])
         confirmaciones = [e["tiempo"] for e in self.eventos if e["evento"] == "CONFIRMACION_ENFERMERO"]
         
-        # Mapeo simple: para cada confirmación, buscamos la alarma inmediatamente anterior
-        for t_conf in confirmaciones:
-            alarmas_previas = [t_al for t_al, tipo in alarmas if t_al <= t_conf]
-            if alarmas_previas:
-                tiempos.append(t_conf - alarmas_previas[-1])
+        # Mapeo correcto: Para cada alarma, buscamos la PRIMERA confirmación que ocurre después
+        for t_al, tipo in alarmas:
+            conf_post = [t_conf for t_conf in confirmaciones if t_conf >= t_al]
+            if conf_post:
+                tiempos.append(conf_post[0] - t_al)
         return tiempos
 
     def tiempo_respuesta_fin_bolsa(self) -> float:
