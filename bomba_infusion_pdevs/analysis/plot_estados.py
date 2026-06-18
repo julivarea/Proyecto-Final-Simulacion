@@ -34,10 +34,8 @@ def plot_estados(trazas, info_sim, out_dir="data/graficos/"):
         
         if caudal == 0.0:
             estados.append(0) # ESTADO 0: Detenida / Apagada
-        elif desvio > 0.0:
-            estados.append(2) # ESTADO 2: Anomalía (Infundiendo pero con desvío)
         else:
-            estados.append(1) # ESTADO 1: Infundiendo Normalmente
+            estados.append(1) # ESTADO 1: Normal / Con desvío
             
     plt.figure(figsize=(12, 4)) # Más bajito y alargado, ideal para líneas de tiempo
     
@@ -48,8 +46,8 @@ def plot_estados(trazas, info_sim, out_dir="data/graficos/"):
     plt.fill_between(tiempos, estados, step='post', color='teal', alpha=0.15)
     
     # Configurar el eje Y para que muestre texto en lugar de números
-    plt.yticks([0, 1, 2], ["Detenida", "Normal", "Anomalía"])
-    plt.ylim(-0.5, 2.5) # Márgenes visuales
+    plt.yticks([0, 1], ["Detenida", "Normal / Con desvío"])
+    plt.ylim(-0.5, 1.5) # Márgenes visuales
     
     plt.title(f"Estado Operativo de la Bomba de Infusión\n{info_sim}")
     plt.xlabel("Tiempo de Simulación (s)")
