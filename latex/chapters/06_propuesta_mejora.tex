@@ -1,0 +1,31 @@
+Como culminación del análisis de los resultados obtenidos, se propone una mejora algorítmica y matemática para la robustez del Controlador de la Bomba ($C$).
+
+\section{Límite de Tolerancia Dinámico Mixto (Porcentual y Nominal)}
+Actualmente, el sistema implementa una condición de fallo basada exclusivamente en una desviación relativa del $10\%$ respecto al caudal objetivo prescrito. El análisis de las trazas revela una vulnerabilidad clínica a altas tasas de infusión:
+
+\begin{itemize}
+    \item Para un caudal pequeño (ej. $10~ml/h$), el $10\%$ de desvío tolerado representa apenas $\pm 1~ml/h$, una cantidad mínima.
+    \item Sin embargo, para un caudal cercano al límite superior (ej. $200~ml/h$), el $10\%$ equivale a tolerar un margen de error de $\pm 20~ml/h$. Esta es una discrepancia absoluta grande. Si el integrador temporal acumula este error durante los $10$ segundos permitidos antes del bloqueo, el volumen extra entregado al paciente puede resultar excesivo, evidenciando que el porcentaje estático no escala de forma segura.
+\end{itemize}
+
+\textbf{Propuesta de Solución:} \\
+Se propone modificar la evaluación de desvíos para que incorpore un límite combinado: una \textbf{cota nominal absoluta estricta} (por ejemplo, $\pm 10~ml/h$), independientemente del porcentaje. Es decir, el desvío máximo a tolerar será el $10\%$ pero si supera los $10~ml/h$ nominales también saltarán las alarmas. La nueva condición matemática de anomalía ($D$) quedaría definida como un límite mixto:
+
+\[ D = \Big( |q - obj| > 0.10 \times obj \Big) \lor \Big( |q - obj| > \text{Max\_Desvio\_Nominal} \Big) \]
+
+De esta manera, a flujos bajos regirá el límite del $10\%$, pero a flujos altos operará el techo absoluto de $10~ml/h$. Esta actualización algorítmica garantizaría que la bomba jamás perfore los límites de dosificación segura en términos de volumen real de fluido, mejorando sustancialmente las garantías de \textit{Safety} del modelo médico.
+
+\section{Integrador de Errores con Decaimiento}
+Actualmente, el Controlador implementa un reinicio abrupto del contador temporal de desvíos: si el sistema acumula $9~s$ de caudal anómalo, pero inmediatamente después el caudal vuelve a entrar al margen de tolerancia durante un instante, el contador se reinicia a $0.0~s$. 
+
+Detectamos entonces una posible vulnerabilidad: si una falla genera un patrón oscilante constante (por ejemplo, $9~s$ de flujo anómalo, seguido de $2~s$ de flujo normal), la bomba jamás alcanzaría los $10~s$ continuos requeridos para emitir una alarma crítica. Sin embargo, el paciente estaría recibiendo una dosificación evidentemente errónea a lo largo del tiempo, de forma que el sistema físico funciona mal pero la lógica formal no logra captarlo.
+
+\textbf{Propuesta de Solución:} \\
+Se propone reemplazar el reinicio instantáneo a cero por un \textbf{acumulador de segundos} que se va cargando y descargando progresivamente con los segundos con y sin desvío en vez de resetearse a 0. Matemáticamente, en lugar de reiniciar el estado $seg\_desvio$ a $0$ de un solo golpe ante una lectura normal, la función de transición lo modificará de a poco:
+
+\begin{itemize}
+    \item Si $D$ es verdadero (con desvío), el acumulador se carga: $seg\_desvio' = seg\_desvio + e$
+    \item Si $D$ es falso (sin desvío), el acumulador se descarga: $seg\_desvio' = \max(0, seg\_desvio - e)$
+\end{itemize}
+
+De esta manera, un sistema que oscila y falla intermitentemente la mayor parte del tiempo terminará acumulando suficientes segundos netos de error para cruzar el umbral de tolerancia y disparar la Alarma Crítica.
