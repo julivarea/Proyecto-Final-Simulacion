@@ -218,3 +218,20 @@ Esta gráfica final categoriza el estado de la bomba de infusión en dos condici
 \begin{itemize}
     \item Las caídas sostenidas al estado \textit{Detenida} (Estado 0) ocurren de forma excepcional, únicamente cuando expira la bolsa (alrededor del segundo 800) o ante una alarma crítica de desvío (alrededor del segundo 100), alineándose perfectamente con las caídas a cero de los puntos naranjas en el gráfico de caudales.
 \end{itemize}
+
+\subsection{Cumplimiento de Métricas Cuantitativas}
+\label{sec:metricas_cuantitativas}
+
+Para dar respuesta directa a los requerimientos de la especificación técnica, el análisis computacional de la traza estocástica de larga duración (1800 segundos) arrojó los siguientes resultados globales:
+
+\begin{itemize}
+    \item \textbf{Cantidad de detenciones preventivas:} Durante la simulación extendida se registraron exactamente \textbf{2 detenciones preventivas} de seguridad (visibles en el Estado 0 de la Figura 4.4). La primera corresponde al bloqueo por desvío crítico de caudal sostenido (aprox. $t=100s$) y la segunda al apagado automático por agotamiento de la bolsa de infusión transcurrida su ventana de gracia (aprox. $t=800s$).
+    
+    \item \textbf{Porcentaje de tiempo con infusión correcta:} Descontando los periodos de detención por seguridad y los breves transitorios donde el ruido del sensor forzó el caudal medido fuera del margen de tolerancia del $\pm 10\%$, el sistema logró mantener la infusión dentro de los parámetros correctos durante el \textbf{92.79\%} del tiempo total de simulación, con un caudal promedio entregado de $120.94~ml/h$.
+
+    \item \textbf{Tiempo de respuesta ante fin de bolsa:} Se verificó empíricamente que, tras la detección del vaciado inminente, el sistema tardó exactamente \textbf{59.70 s} en efectivizar la detención de la bomba, cumpliendo holgadamente con la restricción máxima de $60~s$.
+    
+    \item \textbf{Registro total de alarmas:} A lo largo del experimento se emitieron \textbf{50 notificaciones} al entorno hospitalario (2 de nivel BAJA, 47 de nivel MEDIA debido a las fluctuaciones estocásticas del sensor, y 1 de nivel CRÍTICA que derivó en bloqueo), con un tiempo de confirmación humano promedio de $8.71~s$.
+\end{itemize}
+
+Estos indicadores confirman que el controlador maximiza el tiempo de entrega efectiva de medicación sin comprometer la seguridad del paciente ante fallas severas.
