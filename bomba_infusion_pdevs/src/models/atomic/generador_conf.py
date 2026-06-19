@@ -25,7 +25,5 @@ class GeneradorConfirmaciones(AtomicDEVS):
 
     def intTransition(self):
         # delta_int(sigma) = Exponencial(1/8.0)
-        # TODO: REVISAR ESTA TASA, AHORA EMITE MUCHAS CONFIRMACIONES (EN PROMEDIO 1 CADA 8 SEGUNDOS)
-        # LO QUE ES UTIL PARA SIMULAR CONFIRMACIONES DE ALARMAS, PERO CAPAZ SON EXCESIVAS CUANDO NO HAY ALARMAS
         self.state["sigma"] = exponencial(1 / 8.0) 
         return self.state

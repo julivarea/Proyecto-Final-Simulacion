@@ -30,9 +30,9 @@ donde:
     \item $X_{G_{om}} = \emptyset$ (No posee puertos de entrada).
     \item $Y_{G_{om}} = [0, 200] \times \{out\_caudal\_obj\}$
     \item $S_{G_{om}} = [0, 200] \times \mathbb{R}_{\geq 0}$, donde $s = (caudalObjetivo, \sigma)$.
-    \item $s_0 = (\text{Uniforme}(0, 200), \text{Exponencial}(1 / 300.0))$.
+    \item $s_0 = (\text{Uniforme}(0, 200), \text{Exponencial}(1 / 60.0))$.
     \item $\delta_{ext}(s, e, x) = \emptyset$
-    \item \(\delta_{int}(caudalObjetivo, \sigma) = (\text{Uniforme}(0, 200), \text{Exponencial}(1 / 300.0))\).
+    \item \(\delta_{int}(caudalObjetivo, \sigma) = (\text{Uniforme}(0, 200), \text{Exponencial}(1 / 60.0))\).
     \item \(\lambda(caudalObjetivo, \sigma) = (caudalObjetivo, out\_caudal\_obj)\).
     \item \(ta(caudalObjetivo, \sigma) = \sigma\).
     \item \textbf{Justificación de las distribuciones:} La distribución \textbf{Uniforme (0, 200)} se utiliza para garantizar que el modelo genere órdenes que cubran todo el espectro de caudales válidos, probando el controlador ante casos extremos y transiciones abruptas sin sesgo. La distribución \textbf{Exponencial} para el tiempo de avance asume un proceso de Poisson sin memoria, lo cual es ideal para modelar la llegada impredecible y estocástica de nuevas prescripciones en un entorno hospitalario realista.
@@ -112,7 +112,7 @@ Este componente modela la bolsa de infusión. Rastrea el volumen restante de lí
 en base al caudal medido por el Sensor de Flujo y emite una señal de alerta cuando
 estima que quedan 60 segundos o menos para agotar la bolsa.
 Una vez emitida la alerta, el componente espera exactamente $T_a$ segundos adicionales (el tiempo restante para que la bolsa se vacíe por completo) y luego simula el relleno automático de la bolsa, restituyendo el volumen a su capacidad inicial.
-Se asume una capacidad de bolsa $V_0 = 500$ ml y un umbral de alerta $T_a = 60$ s.
+Se asume una capacidad de bolsa $V_0 = 30$ ml y un umbral de alerta $T_a = 60$ s.
 
 Matemáticamente, el modelo se define como:
 \[ G_{fb} = \langle X_{G_{fb}}, Y_{G_{fb}}, S_{G_{fb}}, \delta_{int}, \delta_{ext}, \lambda, ta \rangle \]
@@ -349,7 +349,8 @@ donde:
     [(\top, out\_alarma\_media), (\text{ALARMA\_MEDIA}, out\_registrar\_evento)] & \text{si } sd' = 5.0 \\ 
     \begin{aligned}
     &[(\top, out\_alarma\_critica), (\top, out\_detener\_bomba), \\
-    &\; (\text{ALARMA\_CRITICA}, out\_registrar\_evento)]
+    &\; (\text{ALARMA\_CRITICA}, out\_registrar\_evento), \\
+    &\; (\text{DETENCION\_MEDICA}, out\_registrar\_evento)]
     \end{aligned} & \text{si } sd' = 10.0 \\ 
     [ ] & \text{en otro caso} 
     \end{cases}
@@ -468,8 +469,8 @@ donde:
         \item \textbf{Recibo un caudal real que difiere en más del 10\% durante 10 segundos:}
         \begin{itemize}
             \item \textbf{Condiciones:} $D$ es verdadero, $sd' = 10.0$. La variable auxiliar $Q_{desvio}$ carga la alarma crítica Y la orden de detener bomba.
-            \item $\delta_{ext}$: Entra al 3er caso ($port = in\_caudal\_medido \land \dots \land sd' = 10.0$). Ocurre un cambio fundamental: Pasa a la fase $\text{PROC\_BLOQUEADO}$, y sobrescribe $caudal\_obj = 0.0$, encolando los tres eventos (alarma crítica, detención y registro). $\sigma = 0$.
-            \item $\lambda$ / $\delta_{int}$: (Se repiten 3 veces). Emite alarma crítica, envía orden $out\_detener\_bomba$ al actuador, y registra.
+            \item $\delta_{ext}$: Entra al 3er caso ($port = in\_caudal\_medido \land \dots \land sd' = 10.0$). Ocurre un cambio fundamental: Pasa a la fase $\text{PROC\_BLOQUEADO}$, y sobrescribe $caudal\_obj = 0.0$, encolando los cuatro eventos (alarma crítica, detención, y los registros de ambas acciones). $\sigma = 0$.
+            \item $\lambda$ / $\delta_{int}$: (Se repiten 4 veces). Emite alarma crítica, envía orden $out\_detener\_bomba$ al actuador, y registra ambas acciones ($\text{ALARMA\_CRITICA}$ y $\text{DETENCION\_MEDICA}$).
             \item $\delta_{int}$ final: Como la fase de origen era $\text{PROC\_BLOQUEADO}$, al vaciarse la cola el controlador NO vuelve a $\text{NORMAL}$, sino que transiciona a $\text{BLOQUEADO\_CRITICO}$ con $\sigma = \infty$.
             \item \textbf{¿Detiene la bomba?} SÍ, el modelo envía el comando físico al actuador.
         \end{itemize}
@@ -543,6 +544,7 @@ donde:
     \item $\lambda(historial, \sigma) = \emptyset$.
     
     \item $ta(historial, \sigma) = \sigma$.
+    \item \textbf{Nota de implementación:} En el código Python, la transición externa enriquece cada token $Xv$ con la marca de tiempo absoluta del evento ($t = t_{last} + e$), almacenando pares $(t, Xv)$ en lugar de tokens sueltos. Esta extensión facilita la construcción de la traza de auditoría temporal utilizada en el análisis de resultados.
 \end{itemize}
 
 \section{Especificación del Modelo Acoplado Global}

@@ -1,32 +1,13 @@
 \section{Estrategia de Validación y Testing}
 
-Para asegurar que el modelo de la bomba de infusión cumple rigurosamente con los requisitos especificados, se implementó una estrategia de validación integral dividida en múltiples capas. Esta estrategia garantiza tanto el correcto funcionamiento individual de las partes como el comportamiento global del sistema acoplado.
-
-\subsection{Pruebas Unitarias (Unit Tests)}
-Las pruebas unitarias tienen como objetivo verificar la lógica interna de cada modelo atómico DEVS de forma aislada. Mediante la inyección de secuencias de entrada controladas directamente en los puertos de cada componente (como el \textit{Controlador}, \textit{Sensor de Flujo}, \textit{Actuador}, etc.), se validó que las funciones de transición (interna y externa) y las funciones de salida generen los estados correctos. Esto asegura que la base del sistema esté libre de errores lógicos antes de su integración.
-
-\subsection{Pruebas de Integración y Construcción de Escenarios}
-Para evaluar el modelo acoplado completo, se diseñó una herramienta denominada \texttt{ScenarioRunner}. Esta clase actúa como un orquestador que permite configurar y ejecutar simulaciones determinísticas sin alterar el código fuente del modelo formal. 
-
-Los escenarios controlados se construyen mediante la técnica de \textit{monkey patching} controlada temporalmente, lo que permite:
+Para asegurar que el modelo de la bomba de infusión cumple rigurosamente con los requisitos especificados, se ejecutó una estrategia de validación integral. Como se detalló en el Capítulo 4 (Infraestructura de Validación), el proceso se apoyó en herramientas automatizadas desarrolladas específicamente para este proyecto:
 \begin{itemize}
-    \item \textbf{Inyectar órdenes médicas:} Programar cambios de caudal en instantes de tiempo específicos.
-    \item \textbf{Simular fallas físicas:} Alterar la salida del sensor de flujo para emular discrepancias entre el caudal real y el medido.
-    \item \textbf{Controlar el entorno humano:} Silenciar o programar las confirmaciones del personal de enfermería para evaluar la escalabilidad de las alarmas.
+    \item \textbf{Pruebas Unitarias:} Para validar la lógica interna aislada de cada modelo atómico DEVS.
+    \item \textbf{Pruebas de Integración y Construcción de Escenarios (\texttt{ScenarioRunner}):} Para inyectar fallas y órdenes precisas, evaluando el modelo acoplado completo bajo condiciones de estrés predefinidas mediante \textit{monkey patching}.
+    \item \textbf{Verificación Automática (\texttt{PropertyCheckers}):} Para analizar pasivamente las trazas de simulación asegurando el cumplimiento formal de las propiedades de seguridad (\textit{safety}), vivacidad (\textit{liveness}) y restricciones temporales.
 \end{itemize}
-De esta forma, el sistema se somete a condiciones de estrés predefinidas que emulan situaciones clínicas reales.
 
-\subsection{Verificación Automática de Propiedades}
-En lugar de verificar los resultados visualmente, se desarrolló un módulo de \textit{Property Checkers} (Verificadores de Propiedades). Este módulo analiza las trazas temporales extraídas por un monitor pasivo y evalúa el cumplimiento de las reglas del proyecto de manera automática.
-
-Es fundamental destacar que \textbf{estos verificadores son genéricos}. Al estar desacoplados de la lógica de inyección de los escenarios, pueden recibir una traza generada por un escenario estrictamente controlado, o bien, una traza resultante de una simulación estocástica prolongada (con tiempos y fallas aleatorias), y verificar con la misma rigurosidad si el sistema violó alguna regla.
-
-Las propiedades verificadas se dividen en tres categorías principales basadas en la especificación formal del proyecto:
-\begin{itemize}
-    \item \textbf{Propiedades de Seguridad (Safety):} Aseguran que el sistema no cause daño (e.g., el caudal no supera los 200 ml/h, y la bomba no infunde líquido bajo una orden de detención o durante un bloqueo crítico).
-    \item \textbf{Propiedades de Vivacidad (Liveness):} Garantizan que el sistema eventualmente tome acciones esperadas (e.g., una alarma crítica no confirmada repite su notificación de forma indefinida).
-    \item \textbf{Propiedades Temporales:} Verifican el cumplimiento de restricciones de tiempo estricto (e.g., inicio de infusión en $<3$ segundos, detención a los 60 segundos tras el fin de bolsa, emisión de alarma media a los 5 segundos exactos de desvío).
-\end{itemize}
+A continuación, se detalla la evidencia de ejecución y los resultados obtenidos para cada uno de los escenarios planeados.
 
 \section{Escenarios Simulados y Cumplimiento de Requisitos}
 
@@ -79,7 +60,7 @@ Tiempo | Caudal Indicado | Caudal Real Sensado | Segundos de Desvío
 \end{verbatim}
 
 \subsection{Escenario 5: Desvío mayor (Alarma Media)}
-Ante una falla severa sostenida, la traza de simulación demuestra que exactamente al acumularse 5 segundos de discrepancia persistente (entre $t=20.00s$ y $t=25.00s$), el sistema reacciona emitiendo la señal \texttt{ALARMA\_MEDIA}, cumpliendo la restricción impuesta sobre el monitoreo continuo.
+Ante una falla severa sostenida, la traza de simulación demuestra que al acumularse 5 segundos de discrepancia persistente, el sistema reacciona emitiendo la señal \texttt{ALARMA\_MEDIA} en $t=24.11s$ (el desfasaje cronológico exacto de $0.11s$ se debe a la latencia inherente del actuador al arranque, que desplaza la ventana de evaluación del sensor). Esto cumple la restricción impuesta sobre el monitoreo continuo.
 \begin{verbatim}
 Tiempo: 24.11s | Evento: ALARMA_MEDIA
 ...
@@ -114,8 +95,11 @@ Historial de emisiones físicas hacia el entorno hospitalario:
  t=29.11s -> Emite Sonido/Luz: CRITICA (Debe repetirse cada 10s tras 30s)
  t=59.11s -> Emite Sonido/Luz: CRITICA (Debe repetirse cada 10s tras 30s)
  t=69.11s -> Emite Sonido/Luz: CRITICA (Debe repetirse cada 10s tras 30s)
- t=79.11s -> Emite Sonido/Luz: CRITICA (Debe repetirse cada 10s tras 30s)
+ \textbf{t=79.11s -> Emite Sonido/Luz: CRITICA (Debe repetirse cada 10s tras 30s)}
 \end{verbatim}
+
+\subsection{Escenario 8: Desvío crítico confirmado}
+Este escenario evalúa el mecanismo de recuperación. Tras ocurrir un desvío permanente que dispara la \texttt{ALARMA\_CRITICA} y bloquea la bomba (similar al Escenario 7), el enfermero interviene confirmando la alarma y ajustando la bomba a los 45 segundos. El sistema registra la confirmación y levanta el bloqueo crítico, retornando a una fase segura para continuar la operación.
 
 \section{Análisis Estocástico y Reducción de Riesgos}
 
@@ -143,7 +127,7 @@ Implementado en \texttt{test\_stochastic\_absent\_nurse.py}. Representa el "peor
 Con el fin de evaluar el comportamiento del sistema a lo largo de un período prolongado y bajo condiciones de incertidumbre, se ejecutaron simulaciones estocásticas de larga duración (30 minutos / 1800 segundos). De estas trazas se extrajeron métricas y representaciones gráficas que permiten verificar empíricamente el cumplimiento de los requerimientos de diseño, respondiendo a la exigencia de visualizar el estado del controlador.
 
 \subsection{Evolución del Caudal y Tolerancia}
-El requerimiento principal de la bomba es mantener el caudal real lo más cercano posible al caudal indicado por la orden médica. En la Figura 4.1 se observa la evolución de las variables asociadas al caudal.
+El requerimiento principal de la bomba es mantener el caudal real lo más cercano posible al caudal indicado por la orden médica. En la Figura \ref{fig:caudales} se observa la evolución de las variables asociadas al caudal.
 
 \begin{figure}[hbt!]
     \centering
@@ -165,7 +149,7 @@ En este gráfico se distinguen dos elementos fundamentales:
 \end{itemize}
 
 \subsection{Análisis Temporal de Desviaciones}
-Para evitar la fatiga por alarmas (\textit{alarm fatigue}), el sistema no reacciona instantáneamente ante cualquier pico de ruido, sino que integra el tiempo de desvío sostenido. La Figura 4.2 demuestra gráficamente este mecanismo.
+Para evitar la fatiga por alarmas (\textit{alarm fatigue}), el sistema no reacciona instantáneamente ante cualquier pico de ruido, sino que integra el tiempo de desvío sostenido. La Figura \ref{fig:desvios} demuestra gráficamente este mecanismo.
 
 \begin{figure}[hbt!]
     \centering
@@ -174,7 +158,7 @@ Para evitar la fatiga por alarmas (\textit{alarm fatigue}), el sistema no reacci
     \label{fig:desvios}
 \end{figure}
 
-El gráfico de desviaciones muestra cómo el integrador temporal incrementa su cuenta segundo a segundo únicamente cuando una medición del sensor (punto naranja de la Figura 4.1) cae fuera de la banda del $\pm 10\%$. Si una sola lectura vuelve a ingresar a la zona segura, el contador se reinicia a cero de forma inmediata para evitar falsos positivos.
+El gráfico de desviaciones muestra cómo el integrador temporal incrementa su cuenta segundo a segundo únicamente cuando una medición del sensor (punto naranja de la Figura \ref{fig:caudales}) cae fuera de la banda del $\pm 10\%$. Si una sola lectura vuelve a ingresar a la zona segura, el contador se reinicia a cero de forma inmediata para evitar falsos positivos.
 
 \textbf{Análisis de Observaciones Clave:}
 \begin{itemize}
@@ -182,7 +166,7 @@ El gráfico de desviaciones muestra cómo el integrador temporal incrementa su c
 \end{itemize}
 
 \subsection{Registro Histórico de Alarmas}
-Las emisiones destinadas a notificar al personal de salud fueron registradas y categorizadas a lo largo del experimento estocástico. La Figura 4.3 expone la frecuencia y la distribución de estos eventos.
+Las emisiones destinadas a notificar al personal de salud fueron registradas y categorizadas a lo largo del experimento estocástico. La Figura \ref{fig:alarmas} expone la frecuencia y la distribución de estos eventos.
 
 \begin{figure}[hbt!]
     \centering
@@ -199,7 +183,7 @@ El gráfico de alarmas permite correlacionar cronológicamente las alertas emiti
 \end{itemize}
 
 \subsection{Transiciones Lógicas de Estado}
-A partir del análisis combinado de las métricas anteriores, se abstrajo el comportamiento de la bomba en dos macro-estados operativos. La Figura 4.4 ilustra este ciclo de vida.
+A partir del análisis combinado de las métricas anteriores, se abstrajo el comportamiento de la bomba en dos macro-estados operativos. La Figura \ref{fig:estados} ilustra este ciclo de vida.
 
 \begin{figure}[hbt!]
     \centering
@@ -225,7 +209,7 @@ Esta gráfica final categoriza el estado de la bomba de infusión en dos condici
 Para dar respuesta directa a los requerimientos de la especificación técnica, el análisis computacional de la traza estocástica de larga duración (1800 segundos) arrojó los siguientes resultados globales:
 
 \begin{itemize}
-    \item \textbf{Cantidad de detenciones preventivas:} Durante la simulación extendida se registraron exactamente \textbf{2 detenciones preventivas} de seguridad (visibles en el Estado 0 de la Figura 4.4). La primera corresponde al bloqueo por desvío crítico de caudal sostenido (aprox. $t=100s$) y la segunda al apagado automático por agotamiento de la bolsa de infusión transcurrida su ventana de gracia (aprox. $t=800s$).
+    \item \textbf{Cantidad de detenciones preventivas:} Durante la simulación extendida se registraron exactamente \textbf{2 detenciones preventivas} de seguridad (visibles en el Estado 0 de la Figura \ref{fig:estados}). La primera corresponde al bloqueo por desvío crítico de caudal sostenido (aprox. $t=100s$) y la segunda al apagado automático por agotamiento de la bolsa de infusión transcurrida su ventana de gracia (aprox. $t=800s$).
     
     \item \textbf{Porcentaje de tiempo con infusión correcta:} Descontando los periodos de detención por seguridad y los breves transitorios donde el ruido del sensor forzó el caudal medido fuera del margen de tolerancia del $\pm 10\%$, el sistema logró mantener la infusión dentro de los parámetros correctos durante el \textbf{92.79\%} del tiempo total de simulación, con un caudal promedio entregado de $120.94~ml/h$.
 

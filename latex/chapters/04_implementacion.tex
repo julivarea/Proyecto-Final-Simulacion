@@ -1,0 +1,66 @@
+\section{Herramienta de Simulación: PyPDEVS}
+
+El modelo fue implementado en el lenguaje de programación \textbf{Python} utilizando la biblioteca de simulación \textbf{PyPDEVS}, un framework de código abierto desarrollado por la Universidad de Amberes que implementa el formalismo DEVS Clásico y Paralelo. Esta herramienta fue seleccionada por su compatibilidad directa con la especificación matemática del Capítulo 3: cada modelo atómico se implementa como una clase Python que hereda de \texttt{AtomicDEVS} y define exactamente las funciones del formalismo ($\delta_{int}$, $\delta_{ext}$, $\lambda$, $ta$), mientras que el modelo acoplado hereda de \texttt{CoupledDEVS} y declara las conexiones entre puertos.
+
+\section{Estructura del Proyecto}
+
+El código fuente del proyecto se organiza en la siguiente estructura de directorios:
+
+\begin{verbatim}
+bomba_infusion_pdevs/
+|-- src/
+|   |-- models/
+|   |   |-- atomic/        # 8 modelos atómicos DEVS
+|   |   +-- coupled/       # Modelo acoplado global
+|   +-- utils/
+|       |-- distribuciones.py  # Wrappers de distribuciones
+|       |-- monitor.py         # Monitor pasivo de trazas
+|       +-- metrics.py         # Cálculo de métricas
+|-- tests/
+|   |-- unit/              # Pruebas unitarias por componente
+|   |-- scenarios/
+|   |   |-- controlled/    # Escenarios determinísticos
+|   |   +-- stochastic/    # Escenarios estocásticos puros
+|   +-- helpers/
+|       |-- scenario_runner.py    # Orquestador de escenarios
+|       +-- property_checkers.py  # Verificadores formales
+|-- experiments/           # Scripts de ejecución y salida
++-- analysis/              # Generación de gráficos
+\end{verbatim}
+
+\section{Correspondencia entre la Especificación Formal y el Código}
+
+Cada modelo atómico definido en el Capítulo 3 se implementó como una clase Python que extiende \texttt{AtomicDEVS}. La correspondencia directa se estructura de la siguiente forma:
+
+\begin{itemize}
+    \item El \textbf{estado} ($S$) se representa como un diccionario Python (\texttt{self.state}) cuyas claves coinciden con las variables formales del modelo (e.g., \texttt{fase}, \texttt{caudal\_obj}, \texttt{sigma}).
+    \item Los \textbf{puertos de entrada y salida} ($X$, $Y$) se declaran mediante los métodos \texttt{addInPort} y \texttt{addOutPort} del framework.
+    \item La \textbf{función de avance de tiempo} ($ta$) se implementa en el método \texttt{timeAdvance()}, retornando el valor de \texttt{sigma} del estado.
+    \item La \textbf{función de salida} ($\lambda$) se implementa en \texttt{outputFnc()}, retornando un diccionario que mapea puertos a valores.
+    \item La \textbf{transición interna} ($\delta_{int}$) se implementa en \texttt{intTransition()}.
+    \item La \textbf{transición externa} ($\delta_{ext}$) se implementa en \texttt{extTransition(inputs)}, donde \texttt{inputs} es un diccionario indexado por puerto.
+\end{itemize}
+
+Las distribuciones estocásticas se encapsulan en el módulo \texttt{distribuciones.py}, que provee funciones para generar valores aleatorios de las distribuciones Uniforme, Exponencial y Normal utilizando el generador pseudoaleatorio de Python. Todas las simulaciones reproducibles fijan la semilla del generador con \texttt{random.seed()} antes de la ejecución.
+
+\section{Infraestructura de Validación}
+
+\subsection{Orquestador de Escenarios (\texttt{ScenarioRunner})}
+Para ejecutar simulaciones controladas sin modificar el código fuente de los modelos formales, se diseñó la clase \texttt{ScenarioRunner}. Esta instancia el modelo acoplado completo e inyecta un \texttt{SimulationMonitor} para la recolección pasiva de trazas. Permite configurar el entorno de prueba mediante los siguientes métodos de inyección:
+\begin{itemize}
+    \item \texttt{patch\_ordenes}: Programa órdenes médicas determinísticas en instantes de tiempo específicos.
+    \item \texttt{patch\_sensor\_fault}: Inyecta una lectura falsa en el sensor durante un intervalo de tiempo definido.
+    \item \texttt{patch\_enfermero}: Controla el comportamiento del generador de confirmaciones (silenciarlo completamente o programar una confirmación en un instante fijo).
+    \item \texttt{patch\_fin\_bolsa}: Fuerza la alerta de fin de bolsa en un instante determinístico.
+\end{itemize}
+
+\subsection{Monitor Pasivo (\texttt{SimulationMonitor})}
+El componente \texttt{SimulationMonitor} intercepta las transiciones de los modelos clave (Controlador, Sensor, Módulo de Alarmas) mediante la técnica de \textit{monkey patching} para registrar la evolución temporal del caudal objetivo, caudal real, caudal medido, fase del controlador, desvíos acumulados, estado de la bolsa y emisiones de alarma. Esta recolección pasiva no altera el comportamiento del modelo y genera las trazas utilizadas tanto para los gráficos del Capítulo 5 como para la verificación automática de propiedades.
+
+\subsection{Verificadores de Propiedades (\texttt{PropertyCheckers})}
+Se implementó un módulo de verificación automática que analiza las trazas temporales producidas por el monitor y evalúa el cumplimiento formal de las reglas del sistema. Estos verificadores son \textbf{genéricos}: al estar desacoplados de la lógica de inyección de cada escenario, pueden recibir tanto una traza generada por un escenario controlado como una resultante de una simulación estocástica prolongada, y verificar con la misma rigurosidad si el sistema violó alguna regla. Las propiedades verificadas se organizan en tres categorías:
+\begin{itemize}
+    \item \textbf{Propiedades de Seguridad (Safety):} El caudal real no supera los 200 ml/h. La bomba no infunde líquido durante un bloqueo crítico no confirmado.
+    \item \textbf{Propiedades de Vivacidad (Liveness):} Toda orden médica produce infusión eventualmente. Las alarmas críticas no confirmadas se repiten periódicamente. El fin de bolsa produce detención eventual.
+    \item \textbf{Propiedades Temporales:} Inicio de infusión en menos de 3 segundos. Alarma media a los 5 segundos de desvío. Detención dentro de los 60 segundos tras fin de bolsa. Repetición de alarma crítica cada 10 segundos tras 30 segundos sin confirmación.
+\end{itemize}
