@@ -1,0 +1,17 @@
+El presente trabajo permitió especificar, implementar y validar exitosamente un modelo de simulación de eventos discretos (DEVS) para el controlador de una bomba de infusión intravenosa en lazo cerrado. El diseño demostró ser robusto frente a la naturaleza estocástica del entorno físico y operativo, mitigando los riesgos inherentes a un Sistema de Tiempo Real en el dominio médico.
+
+En respuesta a los objetivos fundamentales del proyecto, el análisis automatizado de las trazas de simulación nos permite concluir que el modelo satisface con precisión matemática todos los requisitos y restricciones temporales especificados:
+
+\begin{itemize}
+    \item \textbf{Latencia de inicio y actuación:} Se comprobó empíricamente que toda nueva prescripción médica con caudal válido genera una respuesta física en el actuador en un tiempo estrictamente inferior a los 3 segundos. Asimismo, el mecanismo absorbe correctamente los retardos mecánicos uniformes del motor (hasta $0.5~s$).
+    
+    \item \textbf{Monitoreo y tolerancia a desvíos:} La arquitectura basada en un integrador temporal demostró ser altamente efectiva para evitar la fatiga por alarmas. El sistema toleró correctamente fluctuaciones gaussianas transitorias, emitiendo la advertencia de nivel medio (\textit{Alarma Media}) de manera exacta al acumularse 5 segundos continuos de un desvío superior al $10\%$.
+    
+    \item \textbf{Plazos de seguridad y detención crítica:} Ante fallas persistentes que alcanzaron el umbral de los 10 segundos sostenidos, el controlador logró ejecutar el bloqueo automático de la infusión, priorizando la integridad del paciente.
+    
+    \item \textbf{Ventana de gracia por fin de bolsa:} Las simulaciones confirmaron que el sistema detecta de forma temprana el vaciado de fluidos, emite la alerta preventiva y detiene automáticamente la bomba al cumplirse estrictamente el período máximo permitido de 60 segundos.
+    
+    \item \textbf{Vivacidad en la re-notificación:} Ante un escenario crítico de negligencia o ausencia del personal médico, el módulo de gestión demostró cumplir con los plazos de escalabilidad: aguardando inicialmente los 30 segundos requeridos tras una Alarma Crítica y entrando posteriormente en un bucle teóricamente infinito de repetición estricta cada 10 segundos.
+\end{itemize}
+
+En síntesis, la conjunción de las pruebas unitarias aisladas, los escenarios controlados (\textit{monkey-patching}) y la evaluación estocástica prolongada permiten garantizar formalmente que la lógica de control desarrollada opera siempre dentro de los plazos críticos de seguridad dictados por las normativas de la cátedra.
