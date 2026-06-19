@@ -1,16 +1,14 @@
 # Proyecto Final — Simulación
 
-**Facultad de Ciencias Exactas, Físico-Químicas y Naturales**
-**Universidad Nacional de Río Cuarto (UNRC)**
-**Año: 2026**
+**Facultad de Ciencias Exactas, Físico-Químicas y Naturales** **Universidad Nacional de Río Cuarto (UNRC)** **Año: 2026**
 
 ---
 
 ## Integrantes
 
 | Apellido y Nombre          |
-|---------------------------|
-| Alieni, Agustín           |
+| -------------------------- |
+| Alieni, Agustín            |
 | Varea Grosso, Julián Lucas |
 
 ---
@@ -21,35 +19,34 @@ Modelo de simulación de una **bomba de infusión intravenosa** desarrollado con
 
 ---
 
-## Diagrama del sistema
-
-> [!IMPORTANT]
-> [Ver diagrama en Miro](https://miro.com/app/board/uXjVHIbDhYc=/?share_link_id=995767639722)
-
----
-
 ## Arquitectura del proyecto
 
 ```
 Proyecto Final Simulación/
 │
-├── README.md                        ← Este archivo
-│
-├── docs/                            ← Documentación y referencias
-│   ├── Proyecto_Bomba_Infusion_Promocionar.pdf
-│   └── Tesis_HollmannDiego_137813910453.pdf
+├── README.md              ← Este archivo
+├── pytest.ini             ← Archivo de configuracion para pruebas con Pytest
+├── bomba_infusion_pdevs/  ← Logica del modelo, experimentos, simulacion y tests│
+├── docs/                  ← Enunciado oficial y especificaciones de la catedra
+├── latex/                 ← Fuentes del informe escrito
 ```
 
-### `docs/`
+### Detalle de los componentes
 
-Contiene la documentación de referencia del proyecto:
+#### `bomba_infusion_pdevs/`
 
-- **`Proyecto_Bomba_Infusion_Promocionar.pdf`** — Enunciado y requisitos funcionales del sistema a modelar.
-- **`Tesis_HollmannDiego_137813910453.pdf`** — Tesis de referencia para la formalización CML-DEVS utilizada en el modelo.
+Es el núcleo de desarrollo del proyecto. Contiene la totalidad de los archivos de código fuente organizados en:
 
+- **Lógica de DEVS:** Implementación del comportamiento y acoplamiento de la bomba de infusión.
+- **Experimentos y Simulación:** Escenarios configurados para ejecutar el modelo y evaluar su comportamiento ante diferentes eventos discretos.
+- **Tests:** Suite de pruebas encargadas de validar que la lógica de las transiciones y funciones del sistema respondan de acuerdo a la formalización requerida.
 
+#### `docs/`
 
-## Referencias
+Contiene la documentación complementaria y el enunciado del proyecto final entregado por el cuerpo docente, el cual detalla los requisitos funcionales mínimos y las pautas de evaluación.
 
-- Hollmann, D. — *Tesis doctoral sobre CML-DEVS* (ver `docs/`)
-- Enunciado del proyecto final (ver `docs/`)
+#### `latex/`
+
+Repositorio de los archivos fuente en formato LaTeX para la redacción del trabajo académico. El archivo **`latex/main.pdf`** constituye el informe técnico final listo para la revisión de esta entrega.
+
+---
