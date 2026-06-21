@@ -83,9 +83,7 @@ class GeneradorFinBolsa(AtomicDEVS):
         )
         
         # Leemos el nuevo caudal
-        if self.in_caudal_medido in inputs:
-            # El input fue un nuevo caudal del sensor
-            nuevo_caudal_ml_h = inputs[self.in_caudal_medido][0]
+        nuevo_caudal_ml_h = inputs[self.in_caudal_medido][0]
             
         fase = self.state["fase"]
         
